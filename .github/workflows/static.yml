@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -47,14 +47,14 @@ jobs:
           cp -r dist _site/
           # Copy the examples folder (contains the static apps)
           cp -r examples _site/
-          
+
           # Create a root index.html that redirects to the vanilla-spa example
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=examples/vanilla-spa/index.html" /></head><body><p>Redirecting to <a href="examples/vanilla-spa/index.html">examples/vanilla-spa/index.html</a>...</p></body></html>' > _site/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '_site'
+          path: "_site"
 
   # Deployment job
   deploy:
