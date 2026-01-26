@@ -7,7 +7,7 @@ MakeNoise.js is a TypeScript-based audio player library designed specifically fo
 ## ✨ Features
 
 - 🎵 **Persistent Playback** - Audio continues playing across SPA route changes
-- 🔄 **Playlist Management** - Full playlist support with add, remove, reorder, shuffle, and repeat modes
+- 🔄 **Queue Management** - Full queue support with add, remove, reorder, shuffle, and repeat modes
 - 🎨 **Framework Agnostic** - Vanilla TypeScript core with optional React and Vue adapters
 - 📱 **Media Session API** - Native OS media controls and notifications
 - ⌨️ **Keyboard Shortcuts** - Control playback with keyboard (Space, arrows, M for mute)
@@ -43,48 +43,48 @@ pnpm add makenoise
 ### Vanilla JavaScript/TypeScript
 
 ```typescript
-import { MakeNoise } from 'makenoise';
+import { MakeNoise } from "makenoise";
 
 // Get the singleton player instance
 const player = MakeNoise.getInstance();
 
-// Add tracks to the playlist
-player.addTrack({
-  id: '1',
-  src: '/audio/song.mp3',
-  title: 'My Favorite Song',
-  artist: 'Artist Name',
-  artwork: '/images/album-art.jpg'
+// Add tracks to the queue
+player.addToQueue({
+  id: "1",
+  src: "/audio/song.mp3",
+  title: "My Favorite Song",
+  artist: "Artist Name",
+  artwork: "/images/album-art.jpg",
 });
 
 // Start playback
 player.play();
 
 // Listen to player events
-player.on('play', () => console.log('Playing!'));
-player.on('pause', () => console.log('Paused!'));
-player.on('trackchange', (track) => console.log('Now playing:', track.title));
+player.on("play", () => console.log("Playing!"));
+player.on("pause", () => console.log("Paused!"));
+player.on("trackchange", (track) => console.log("Now playing:", track.title));
 ```
 
 ### React
 
 ```tsx
-import { useMakeNoise } from 'makenoise/react';
+import { useMakeNoise } from "makenoise/react";
 
 function PlayerControls() {
-  const { state, play, pause, next, previous, playlist } = useMakeNoise();
-  
+  const { state, play, pause, next, previous, queue } = useMakeNoise();
+
   return (
     <div>
-      <h3>{state.currentTrack?.title || 'No track playing'}</h3>
+      <h3>{state.currentTrack?.title || "No track playing"}</h3>
       <p>{state.currentTrack?.artist}</p>
-      
+
       <button onClick={previous}>⏮️ Previous</button>
-      <button onClick={() => state.isPlaying ? pause() : play()}>
-        {state.isPlaying ? '⏸️ Pause' : '▶️ Play'}
+      <button onClick={() => (state.isPlaying ? pause() : play())}>
+        {state.isPlaying ? "⏸️ Pause" : "▶️ Play"}
       </button>
       <button onClick={next}>⏭️ Next</button>
-      
+
       <div>
         <input
           type="range"
@@ -94,8 +94,8 @@ function PlayerControls() {
           onChange={(e) => seek(parseFloat(e.target.value))}
         />
       </div>
-      
-      <p>Playlist: {playlist.length} tracks</p>
+
+      <p>Queue: {queue.length} tracks</p>
     </div>
   );
 }
@@ -106,15 +106,15 @@ function PlayerControls() {
 ```vue
 <template>
   <div class="player-controls">
-    <h3>{{ state.currentTrack?.title || 'No track playing' }}</h3>
+    <h3>{{ state.currentTrack?.title || "No track playing" }}</h3>
     <p>{{ state.currentTrack?.artist }}</p>
-    
+
     <button @click="previous">⏮️ Previous</button>
     <button @click="state.isPlaying ? pause() : play()">
-      {{ state.isPlaying ? '⏸️ Pause' : '▶️ Play' }}
+      {{ state.isPlaying ? "⏸️ Pause" : "▶️ Play" }}
     </button>
     <button @click="next">⏭️ Next</button>
-    
+
     <input
       type="range"
       :min="0"
@@ -122,15 +122,15 @@ function PlayerControls() {
       :value="state.currentTime"
       @input="seek(parseFloat($event.target.value))"
     />
-    
-    <p>Playlist: {{ playlist.length }} tracks</p>
+
+    <p>Queue: {{ queue.length }} tracks</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useMakeNoise } from 'makenoise/vue';
+import { useMakeNoise } from "makenoise/vue";
 
-const { state, play, pause, next, previous, seek, playlist } = useMakeNoise();
+const { state, play, pause, next, previous, seek, queue } = useMakeNoise();
 </script>
 ```
 
@@ -144,12 +144,12 @@ Get the singleton player instance. Only the first call accepts configuration.
 
 ```typescript
 const player = MakeNoise.getInstance({
-  persistState: true,              // Enable localStorage persistence (default: true)
-  persistenceKey: 'my_player',     // localStorage key (default: 'makenoise_state')
-  enableKeyboardShortcuts: true,   // Enable keyboard shortcuts (default: true)
-  enableMediaSession: true,        // Enable Media Session API (default: true)
-  initialVolume: 0.8,              // Initial volume 0-1 (default: 1.0)
-  preloadStrategy: 'metadata'      // 'none' | 'metadata' | 'auto' (default: 'metadata')
+  persistState: true, // Enable localStorage persistence (default: true)
+  persistenceKey: "my_player", // localStorage key (default: 'makenoise_state')
+  enableKeyboardShortcuts: true, // Enable keyboard shortcuts (default: true)
+  enableMediaSession: true, // Enable Media Session API (default: true)
+  initialVolume: 0.8, // Initial volume 0-1 (default: 1.0)
+  preloadStrategy: "metadata", // 'none' | 'metadata' | 'auto' (default: 'metadata')
 });
 ```
 
@@ -157,9 +157,9 @@ const player = MakeNoise.getInstance({
 
 ```typescript
 // Play a track by index or Track object, or resume current track
-await player.play();              // Resume current track
-await player.play(0);             // Play first track in playlist
-await player.play(track);         // Play specific track
+await player.play(); // Resume current track
+await player.play(0); // Play first track in queue
+await player.play(track); // Play specific track
 
 // Pause playback
 player.pause();
@@ -176,70 +176,70 @@ player.setVolume(0.5);
 // Set playback rate (0.5-2.0 typically)
 player.setPlaybackRate(1.5);
 
-// Navigate playlist
-player.next();                    // Play next track
-player.previous();                // Play previous track (or restart if >3s into track)
+// Navigate queue
+player.next(); // Play next track
+player.previous(); // Play previous track (or restart if >3s into track)
 ```
 
-#### Playlist Management Methods
+#### Queue Management Methods
 
 ```typescript
-// Add single track
-player.addTrack({
-  id: '1',
-  src: '/audio/song.mp3',
-  title: 'Song Title',
-  artist: 'Artist Name',
-  artwork: '/images/art.jpg'
+// Add single track to end of queue
+player.addToQueue({
+  id: "1",
+  src: "/audio/song.mp3",
+  title: "Song Title",
+  artist: "Artist Name",
+  artwork: "/images/art.jpg",
 });
 
-// Add multiple tracks
-player.addTrack([track1, track2, track3]);
+// Add multiple tracks to end of queue
+player.addToQueue([track1, track2, track3]);
 
-// Add track at specific position
-player.addTrack(track, 2);        // Insert at index 2
+// Play track next (insert after current)
+player.playNext(track);
 
 // Remove track by index
-player.removeTrack(0);
+player.removeFromQueue(0);
 
-// Clear entire playlist
-player.clearPlaylist();
+// Clear entire queue
+player.clearQueue();
 
-// Set current track
-player.setCurrentTrack(track);    // By Track object
-player.setCurrentTrack(2);        // By index
+// Jump to specific position in queue
+player.jumpToQueueIndex(2); // Jump to index 2
 ```
 
-#### Playlist Modes
+#### Queue Modes
 
 ```typescript
 // Set repeat mode
-player.setRepeatMode('none');     // Stop at end of playlist
-player.setRepeatMode('one');      // Repeat current track
-player.setRepeatMode('all');      // Loop entire playlist
+player.setRepeatMode("none"); // Stop at end of queue
+player.setRepeatMode("one"); // Repeat current track
+player.setRepeatMode("all"); // Loop entire queue
 
 // Toggle shuffle
-player.toggleShuffle();           // Randomize playlist order
+player.toggleShuffle(); // Randomize queue order
 ```
 
 #### Event Subscription
 
 ```typescript
 // Subscribe to events
-player.on('play', () => console.log('Playing'));
-player.on('pause', () => console.log('Paused'));
-player.on('ended', () => console.log('Track ended'));
-player.on('trackchange', (track) => console.log('Track changed:', track));
-player.on('playlistchange', () => console.log('Playlist updated'));
-player.on('timeupdate', (time) => console.log('Current time:', time));
-player.on('volumechange', (volume) => console.log('Volume:', volume));
-player.on('error', (error) => console.error('Error:', error));
-player.on('statechange', (state) => console.log('State updated:', state));
+player.on("play", () => console.log("Playing"));
+player.on("pause", () => console.log("Paused"));
+player.on("ended", () => console.log("Track ended"));
+player.on("trackchange", (track) => console.log("Track changed:", track));
+player.on("playlistchange", () => console.log("Playlist updated"));
+player.on("queuechange", () => console.log("Queue updated"));
+player.on("timeupdate", (time) => console.log("Current time:", time));
+player.on("volumechange", (volume) => console.log("Volume:", volume));
+player.on("error", (error) => console.error("Error:", error));
+player.on("statechange", (state) => console.log("State updated:", state));
 
 // Unsubscribe from events
-const handler = () => console.log('Playing');
-player.on('play', handler);
-player.off('play', handler);
+const handler = () => console.log("Playing");
+player.on("play", handler);
+player.off("play", handler);
 ```
 
 #### State Query Methods
@@ -251,9 +251,9 @@ console.log(state.isPlaying);
 console.log(state.currentTrack);
 console.log(state.volume);
 
-// Get current playlist (immutable copy)
-const playlist = player.getPlaylist();
-console.log(playlist.length);
+// Get current queue (immutable copy)
+const queue = player.getQueue();
+console.log(queue.length);
 ```
 
 ### TypeScript Types
@@ -278,7 +278,8 @@ interface PlayerState {
   volume: number;
   playbackRate: number;
   currentTrack: Track | null;
-  currentTrackIndex: number;
+  currentQueueIndex: number;
+  queueLength: number;
   repeatMode: 'none' | 'one' | 'all';
   isShuffling: boolean;
   error: PlayerError | null;
@@ -293,8 +294,7 @@ type PlayerEvents =
   | 'volumechange'
   | 'ratechange'
   | 'trackchange'
-  | 'playlistchange'
-  | 'error'
+  | 'queue
   | 'statechange'
   | 'loading'
   | 'loadeddata'
@@ -309,27 +309,28 @@ type PlayerEvents =
 React hook that provides reactive player state and control methods.
 
 ```typescript
-import { useMakeNoise } from 'makenoise/react';
+import { useMakeNoise } from "makenoise/react";
 
 function MyComponent() {
   const {
-    state,           // PlayerState (reactive)
-    playlist,        // Track[] (reactive)
-    play,            // (trackOrIndex?) => Promise<void>
-    pause,           // () => void
+    state, // PlayerState (reactive)
+    queue, // Track[] (reactive)
+    play, // (trackOrIndex?) => Promise<void>
+    pause, // () => void
     togglePlayPause, // () => void
-    seek,            // (time: number) => void
-    setVolume,       // (volume: number) => void
+    seek, // (time: number) => void
+    setVolume, // (volume: number) => void
     setPlaybackRate, // (rate: number) => void
-    next,            // () => void
-    previous,        // () => void
-    addTrack,        // (track: Track | Track[], index?) => void
-    removeTrack,     // (index: number) => void
-    clearPlaylist,   // () => void
-    setRepeatMode,   // (mode: RepeatMode) => void
-    toggleShuffle,   // () => void
+    next, // () => void
+    previous, // () => void
+    addToQueue, // (track: Track | Track[]) => void
+    playNext, // (track: Track | Track[]) => void
+    removeFromQueue, // (index: number) => void
+    clearQueue, // () => void
+    setRepeatMode, // (mode: RepeatMode) => void
+    toggleShuffle, // () => void
   } = useMakeNoise();
-  
+
   // Use state and methods...
 }
 ```
@@ -351,7 +352,7 @@ function App() {
 
 function MyComponent() {
   const player = useMediaPlayer();  // Access MakeNoise instance directly
-  
+
   useEffect(() => {
     player.on('play', () => console.log('Playing!'));
     return () => player.off('play', handler);
@@ -366,31 +367,32 @@ function MyComponent() {
 Vue composable that provides reactive player state and control methods.
 
 ```typescript
-import { useMakeNoise } from 'makenoise/vue';
+import { useMakeNoise } from "makenoise/vue";
 
 export default {
   setup() {
     const {
-      state,           // Ref<PlayerState> (reactive)
-      playlist,        // Ref<Track[]> (reactive)
-      play,            // (trackOrIndex?) => Promise<void>
-      pause,           // () => void
+      state, // Ref<PlayerState> (reactive)
+      queue, // Ref<Track[]> (reactive)
+      play, // (trackOrIndex?) => Promise<void>
+      pause, // () => void
       togglePlayPause, // () => void
-      seek,            // (time: number) => void
-      setVolume,       // (volume: number) => void
+      seek, // (time: number) => void
+      setVolume, // (volume: number) => void
       setPlaybackRate, // (rate: number) => void
-      next,            // () => void
-      previous,        // () => void
-      addTrack,        // (track: Track | Track[], index?) => void
-      removeTrack,     // (index: number) => void
-      clearPlaylist,   // () => void
-      setRepeatMode,   // (mode: RepeatMode) => void
-      toggleShuffle,   // () => void
+      next, // () => void
+      previous, // () => void
+      addToQueue, // (track: Track | Track[]) => void
+      playNext, // (track: Track | Track[]) => void
+      removeFromQueue, // (index: number) => void
+      clearQueue, // () => void
+      setRepeatMode, // (mode: RepeatMode) => void
+      toggleShuffle, // () => void
     } = useMakeNoise();
-    
-    return { state, playlist, play, pause, /* ... */ };
-  }
-}
+
+    return { state, queue, play, pause /* ... */ };
+  },
+};
 ```
 
 #### `MediaPlayerPlugin`
@@ -398,13 +400,13 @@ export default {
 Vue plugin for global player instance access.
 
 ```typescript
-import { createApp } from 'vue';
-import { MediaPlayerPlugin } from 'makenoise/vue';
-import App from './App.vue';
+import { createApp } from "vue";
+import { MediaPlayerPlugin } from "makenoise/vue";
+import App from "./App.vue";
 
 const app = createApp(App);
 app.use(MediaPlayerPlugin);
-app.mount('#app');
+app.mount("#app");
 
 // Access in components via:
 // this.$player (Options API)
@@ -415,14 +417,14 @@ app.mount('#app');
 
 When `enableKeyboardShortcuts` is true (default), these shortcuts are available globally:
 
-| Key | Action |
-|-----|--------|
-| `Space` | Play / Pause |
-| `M` | Toggle Mute |
-| `→` | Seek forward 10 seconds |
-| `←` | Seek backward 10 seconds |
-| `↑` | Increase volume by 10% |
-| `↓` | Decrease volume by 10% |
+| Key     | Action                   |
+| ------- | ------------------------ |
+| `Space` | Play / Pause             |
+| `M`     | Toggle Mute              |
+| `→`     | Seek forward 10 seconds  |
+| `←`     | Seek backward 10 seconds |
+| `↑`     | Increase volume by 10%   |
+| `↓`     | Decrease volume by 10%   |
 
 ## 💾 State Persistence
 
@@ -432,7 +434,7 @@ MakeNoise automatically persists the following state to localStorage:
 - Volume level
 - Playback rate
 - Repeat mode
-- Shuffle state
+- Shufflequeue
 - Entire playlist
 
 State is restored automatically when the player is initialized, allowing users to resume exactly where they left off, even after closing the browser.
@@ -484,6 +486,7 @@ MakeNoise works in all modern browsers that support:
 - localStorage (optional, gracefully degrades)
 
 Tested in:
+
 - Chrome/Edge 90+
 - Firefox 88+
 - Safari 14+
