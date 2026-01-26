@@ -1,4 +1,4 @@
-# MakeNoise.js
+# [MakeNoise.js](https://gaurav552.github.io/makeNoise/examples/vanilla-spa/index.html)
 
 > A framework-agnostic global media player library for Single Page Applications
 
