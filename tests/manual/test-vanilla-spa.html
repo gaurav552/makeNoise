@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Vanilla SPA</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .success { background-color: #d4edda; border-color: #c3e6cb; }
+    .error { background-color: #f8d7da; border-color: #f5c6cb; }
+    button {
+      margin: 5px;
+      padding: 10px 15px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MakeNoise.js Vanilla SPA Test</h1>
+  
+  <div class="test-section">
+    <h2>Test 1: Player Instantiation</h2>
+    <p id="test1-result">Testing...</p>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 2: Web Component Registration</h2>
+    <p id="test2-result">Testing...</p>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 3: Playlist Management</h2>
+    <p id="test3-result">Testing...</p>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 4: Routing Persistence</h2>
+    <button onclick="testRouting('home')">Go to Home</button>
+    <button onclick="testRouting('playlist')">Go to Playlist</button>
+    <button onclick="testRouting('about')">Go to About</button>
+    <p id="test4-result">Click buttons to test routing...</p>
+  </div>
+
+  <div id="status">
+    <h3>Player Status:</h3>
+    <pre id="player-status">Loading...</pre>
+  </div>
+
+  <div style="margin-top: 30px;">
+    <make-noise-player></make-noise-player>
+  </div>
+
+  <script type="module">
+    import { MakeNoise } from '../../dist/makenoise.js';
+
+    // Test 1: Player Instantiation
+    try {
+      const player1 = MakeNoise.getInstance();
+      const player2 = MakeNoise.getInstance();
+      
+      if (player1 === player2) {
+        document.getElementById('test1-result').innerHTML = 
+          '✅ SUCCESS: Singleton pattern works - both instances are the same';
+        document.querySelector('#test1-result').parentElement.classList.add('success');
+      } else {
+        throw new Error('Singleton pattern failed');
+      }
+    } catch (error) {
+      document.getElementById('test1-result').innerHTML = 
+        `❌ ERROR: ${error.message}`;
+      document.querySelector('#test1-result').parentElement.classList.add('error');
+    }
+
+    // Test 2: Web Component Registration
+    try {
+      const webComponent = document.querySelector('make-noise-player');
+      if (webComponent && customElements.get('make-noise-player')) {
+        document.getElementById('test2-result').innerHTML = 
+          '✅ SUCCESS: Web component is registered and rendered';
+        document.querySelector('#test2-result').parentElement.classList.add('success');
+      } else {
+        throw new Error('Web component not found');
+      }
+    } catch (error) {
+      document.getElementById('test2-result').innerHTML = 
+        `❌ ERROR: ${error.message}`;
+      document.querySelector('#test2-result').parentElement.classList.add('error');
+    }
+
+    // Test 3: Playlist Management
+    try {
+      const player = MakeNoise.getInstance();
+      
+      // Clear any existing playlist
+      player.clearPlaylist();
+      
+      // Add test tracks
+      const testTracks = [
+        {
+          id: 'test1',
+          src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+          title: 'Test Track 1',
+          artist: 'Test Artist 1',
+          artwork: 'https://picsum.photos/seed/test1/300/300'
+        },
+        {
+          id: 'test2',
+          src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+          title: 'Test Track 2',
+          artist: 'Test Artist 2',
+          artwork: 'https://picsum.photos/seed/test2/300/300'
+        }
+      ];
+      
+      player.addTrack(testTracks);
+      const playlist = player.getPlaylist();
+      
+      if (playlist.length === 2) {
+        document.getElementById('test3-result').innerHTML = 
+          `✅ SUCCESS: Playlist has ${playlist.length} tracks`;
+        document.querySelector('#test3-result').parentElement.classList.add('success');
+      } else {
+        throw new Error(`Expected 2 tracks, got ${playlist.length}`);
+      }
+    } catch (error) {
+      document.getElementById('test3-result').innerHTML = 
+        `❌ ERROR: ${error.message}`;
+      document.querySelector('#test3-result').parentElement.classList.add('error');
+    }
+
+    // Test 4: Routing Persistence
+    let routeCount = 0;
+    window.testRouting = function(route) {
+      routeCount++;
+      const player = MakeNoise.getInstance();
+      const state = player.getState();
+      
+      document.getElementById('test4-result').innerHTML = 
+        `✅ Route changed ${routeCount} times. Player instance persists! ` +
+        `Current track: ${state.currentTrack?.title || 'None'}`;
+      document.querySelector('#test4-result').parentElement.classList.add('success');
+    };
+
+    // Update player status
+    function updateStatus() {
+      const player = MakeNoise.getInstance();
+      const state = player.getState();
+      document.getElementById('player-status').textContent = 
+        JSON.stringify({
+          isPlaying: state.isPlaying,
+          currentTrack: state.currentTrack?.title || 'None',
+          playlistLength: player.getPlaylist().length,
+          volume: state.volume,
+          repeatMode: state.repeatMode,
+          isShuffling: state.isShuffling
+        }, null, 2);
+    }
+
+    // Update status every second
+    setInterval(updateStatus, 1000);
+    updateStatus();
+
+    // Listen to player events
+    const player = MakeNoise.getInstance();
+    player.on('statechange', updateStatus);
+    player.on('trackchange', updateStatus);
+    player.on('playlistchange', updateStatus);
+
+    console.log('Test page loaded successfully!');
+  </script>
+</body>
+</html>

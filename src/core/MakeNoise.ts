@@ -1,0 +1,2341 @@
+/**
+ * MakeNoise.js Core Player
+ * 
+ * Main player class implementing singleton pattern for global audio playback.
+ * Manages audio element, state, queue, and event system.
+ */
+
+import { SimpleEventEmitter } from './EventEmitter';
+import { DEFAULT_PLAYER_CONFIG, DEFAULT_PLAYER_STATE, PERSISTENCE_SCHEMA_VERSION } from './constants';
+import type {
+  Track,
+  PlayerState,
+  PlayerConfig,
+  EventHandler,
+  PlayerEvents,
+  PlayerError,
+  PlayerErrorCode,
+  RepeatMode,
+  PersistedState,
+  SimplifiedTrack,
+} from './types';
+
+/**
+ * MakeNoise - Core audio player class
+ * 
+ * Singleton class that manages all audio playback functionality including:
+ * - Audio element lifecycle
+ * - Playback state management
+ * - queue management
+ * - Event emission
+ * - State persistence
+ * - Media Session API integration
+ * - Keyboard shortcuts
+ */
+export class MakeNoise {
+  // Singleton instance
+  private static _instance: MakeNoise | null = null;
+
+  // Private properties
+  private _audio: HTMLAudioElement;
+  private _state: PlayerState;
+  private _queue: Track[];
+  private _originalQueue: Track[];
+  private _eventEmitter: SimpleEventEmitter;
+  private _config: Required<PlayerConfig>;
+  private _debouncedPersist: (() => void) | null = null;
+  private _persistDebounceTimer: number | null = null;
+
+  /**
+   * Private constructor (singleton pattern)
+   * @param config - Optional player configuration
+   */
+  private constructor(config?: PlayerConfig) {
+    // Merge provided config with defaults
+    this._config = {
+      ...DEFAULT_PLAYER_CONFIG,
+      ...config,
+    };
+
+    // Initialize state with default values
+    this._state = {
+      ...DEFAULT_PLAYER_STATE,
+      volume: this._config.initialVolume,
+    };
+
+    // Initialize queue arrays
+    this._queue = [];
+    this._state.queueLength = 0;
+    this._originalQueue = [];
+
+    // Create event emitter instance
+    this._eventEmitter = new SimpleEventEmitter();
+
+    // Create and initialize audio element
+    this._audio = document.createElement('audio');
+    this._initializeAudioElement();
+
+    // Load persisted state from localStorage (if available)
+    // This restores volume, playback rate, repeat mode, shuffle state,
+    // queue, and current track from previous session
+    this._loadPersistedState();
+  }
+
+  /**
+   * Get singleton instance of MakeNoise player
+   * @param config - Optional configuration (only used on first call)
+   * @returns The singleton MakeNoise instance
+   */
+  public static getInstance(config?: PlayerConfig): MakeNoise {
+    if (!MakeNoise._instance) {
+      MakeNoise._instance = new MakeNoise(config);
+    }
+    return MakeNoise._instance;
+  }
+
+  /**
+   * Subscribe to player events
+   * @param eventName - The event to subscribe to
+   * @param handler - The handler function to call when event is emitted
+   */
+  public on(eventName: PlayerEvents, handler: EventHandler): void {
+    this._eventEmitter.on(eventName, handler);
+  }
+
+  /**
+   * Unsubscribe from player events
+   * @param eventName - The event to unsubscribe from
+   * @param handler - The handler function to remove
+   */
+  public off(eventName: PlayerEvents, handler: EventHandler): void {
+    this._eventEmitter.off(eventName, handler);
+  }
+
+  /**
+   * Get current player state
+   * @returns Readonly copy of current player state
+   */
+  public getState(): Readonly<PlayerState> {
+    // Return a deep copy to prevent external mutation
+    // Copy all primitive properties and create deep copies of nested objects
+    return {
+      ...this._state,
+      currentTrack: this._state.currentTrack ? { ...this._state.currentTrack } : null,
+      error: this._state.error ? {
+        ...this._state.error,
+        details: this._state.error.details ? { ...this._state.error.details } : undefined,
+      } : null,
+    };
+  }
+
+  /**
+   * Get current queue
+   * @returns Readonly copy of current queue
+   */
+  public getQueue(): ReadonlyArray<Track> {
+    // Return a shallow copy to prevent external mutation
+    return [...this._queue];
+  }
+
+  /**
+   * Initialize the audio element
+   * Creates and configures the HTMLAudioElement, appending it to document.body
+   * to ensure it persists across SPA route changes.
+   * @private
+   */
+  private _initializeAudioElement(): void {
+    // Set preload strategy from config
+    this._audio.preload = this._config.preloadStrategy;
+
+    // Append to document.body to ensure persistence across route changes
+    document.body.appendChild(this._audio);
+
+    // Set up event listeners on the audio element
+    this._setupAudioEventListeners();
+
+    // Initialize debounced persistence function
+    this._initializeDebouncedPersist();
+
+    // Set up Media Session API action handlers
+    this._setupMediaSessionActionHandlers();
+
+    // Set up keyboard shortcuts
+    this._setupKeyboardShortcuts();
+  }
+
+  /**
+   * Initialize debounced persistence function
+   * 
+   * Creates a debounced version of _persistState() that will only execute
+   * once every 5 seconds, even if called more frequently. This is used to
+   * avoid excessive localStorage writes during timeupdate events.
+   * 
+   * The debounce implementation uses a timer that resets on each call.
+   * Only when 5 seconds pass without a new call will the function execute.
+   * 
+   * @private
+   * 
+   * Requirements: 6.1
+   */
+  private _initializeDebouncedPersist(): void {
+    const DEBOUNCE_DELAY_MS = 5000; // 5 seconds
+
+    this._debouncedPersist = () => {
+      // Clear any existing timer
+      if (this._persistDebounceTimer !== null) {
+        clearTimeout(this._persistDebounceTimer);
+      }
+
+      // Set new timer to persist state after delay
+      this._persistDebounceTimer = window.setTimeout(() => {
+        this._persistState();
+        this._persistDebounceTimer = null;
+      }, DEBOUNCE_DELAY_MS);
+    };
+  }
+
+  /**
+   * Set up event listeners on the audio element
+   * Maps HTMLAudioElement events to player events and updates state accordingly.
+   * @private
+   */
+  private _setupAudioEventListeners(): void {
+    // Play event - audio has started playing
+    this._audio.addEventListener('play', () => {
+      this._state.isPlaying = true;
+      this._state.isPaused = false;
+      this._state.isLoading = false;
+      this._eventEmitter.emit('play');
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+
+    // Pause event - audio has been paused
+    this._audio.addEventListener('pause', () => {
+      this._state.isPlaying = false;
+      this._state.isPaused = true;
+      this._eventEmitter.emit('pause');
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+
+    // Ended event - audio playback has finished
+    this._audio.addEventListener('ended', () => {
+      this._state.isPlaying = false;
+      this._state.isPaused = true;
+      this._eventEmitter.emit('ended');
+      this._eventEmitter.emit('statechange', this.getState());
+      
+      // Auto-advance to next track based on repeat mode
+      this._handleTrackEnded();
+    });
+
+    // Timeupdate event - current playback position has changed
+    this._audio.addEventListener('timeupdate', () => {
+      this._state.currentTime = this._audio.currentTime;
+      this._eventEmitter.emit('timeupdate', this._audio.currentTime);
+      this._eventEmitter.emit('statechange', this.getState());
+      
+      // Debounced persistence to avoid excessive localStorage writes
+      // This will save the current playback position every 5 seconds
+      if (this._debouncedPersist) {
+        this._debouncedPersist();
+      }
+    });
+
+    // Durationchange event - duration metadata has been loaded
+    this._audio.addEventListener('durationchange', () => {
+      this._state.duration = this._audio.duration;
+      this._eventEmitter.emit('durationchange', this._audio.duration);
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+
+    // Volumechange event - volume has changed
+    this._audio.addEventListener('volumechange', () => {
+      this._state.volume = this._audio.volume;
+      this._eventEmitter.emit('volumechange', this._audio.volume);
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+
+    // Ratechange event - playback rate has changed
+    this._audio.addEventListener('ratechange', () => {
+      this._state.playbackRate = this._audio.playbackRate;
+      this._eventEmitter.emit('ratechange', this._audio.playbackRate);
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+
+    // Error event - an error occurred while loading or playing
+    this._audio.addEventListener('error', () => {
+      const audioError = this._audio.error;
+      if (audioError) {
+        const playerError: PlayerError = {
+          code: this._getErrorCodeFromMediaError(audioError),
+          message: this._getErrorMessageFromMediaError(audioError),
+          details: {
+            context: 'audio_element_error',
+            timestamp: Date.now(),
+            state: this.getState(),
+          },
+        };
+        this._state.error = playerError;
+        this._state.isLoading = false;
+        this._eventEmitter.emit('error', playerError);
+        this._eventEmitter.emit('statechange', this.getState());
+      }
+    });
+
+    // Loadeddata event - media data has been loaded
+    this._audio.addEventListener('loadeddata', () => {
+      this._state.isLoading = false;
+      this._state.duration = this._audio.duration;
+      this._eventEmitter.emit('loadeddata');
+      this._eventEmitter.emit('statechange', this.getState());
+    });
+  }
+
+  /**
+   * Handle track ended - auto-advance based on repeat mode
+   * @private
+   */
+  private _handleTrackEnded(): void {
+    const repeatMode = this._state.repeatMode;
+    
+    // If repeat mode is 'one', replay the current track
+    if (repeatMode === 'one') {
+      this.play(this._state.currentQueueIndex);
+      return;
+    }
+    
+    // Try to play next track
+    const hasNext = this._state.currentQueueIndex < this._queue.length - 1;
+    
+    if (hasNext) {
+      // Play next track
+      this.next();
+    } else if (repeatMode === 'all') {
+      // Loop back to first track
+      this.play(0);
+    }
+    // If repeatMode is 'none' and we're at the end, just stop (do nothing)
+  }
+
+  /**
+   * Convert MediaError code to PlayerErrorCode
+   * @param error - The MediaError from the audio element
+   * @returns Corresponding PlayerErrorCode
+   * @private
+   */
+  private _getErrorCodeFromMediaError(error: MediaError): PlayerErrorCode {
+    switch (error.code) {
+      case MediaError.MEDIA_ERR_ABORTED:
+        return 'MEDIA_LOAD_ERROR';
+      case MediaError.MEDIA_ERR_NETWORK:
+        return 'NETWORK_ERROR';
+      case MediaError.MEDIA_ERR_DECODE:
+        return 'UNSUPPORTED_FORMAT';
+      case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        return 'UNSUPPORTED_FORMAT';
+      default:
+        return 'UNKNOWN_ERROR';
+    }
+  }
+
+  /**
+   * Get human-readable error message from MediaError
+   * @param error - The MediaError from the audio element
+   * @returns Human-readable error message
+   * @private
+   */
+  private _getErrorMessageFromMediaError(error: MediaError): string {
+    switch (error.code) {
+      case MediaError.MEDIA_ERR_ABORTED:
+        return 'Media playback was aborted';
+      case MediaError.MEDIA_ERR_NETWORK:
+        return 'Network error occurred while loading media';
+      case MediaError.MEDIA_ERR_DECODE:
+        return 'Media decoding failed - format may be corrupted';
+      case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        return 'Media format is not supported';
+      default:
+        return 'An unknown error occurred';
+    }
+  }
+
+  /**
+   * Play audio
+   * 
+   * Three usage modes:
+   * 1. play(track) - Load and play a specific track
+   * 2. play(index) - Play track at specified queue index
+   * 3. play() - Resume playback of current track
+   * 
+   * @param trackOrIndex - Optional Track object or queue index
+   * @returns Promise that resolves when playback starts
+   */
+  public async play(trackOrIndex?: Track | number): Promise<void> {
+    try {
+      // Case 1: Play with Track parameter (load and play)
+      if (trackOrIndex && typeof trackOrIndex === 'object') {
+        const track = trackOrIndex as Track;
+        
+        // Validate track object
+        if (!track.src || !track.title) {
+          const error: PlayerError = {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid track: src and title are required',
+            details: {
+              context: 'play_with_track',
+              timestamp: Date.now(),
+              state: this.getState(),
+            },
+          };
+          this._state.error = error;
+          this._eventEmitter.emit('error', error);
+          return;
+        }
+
+        // Set loading state
+        this._state.isLoading = true;
+        this._state.error = null;
+        this._eventEmitter.emit('loading');
+        this._eventEmitter.emit('statechange', this.getState());
+
+        // Load track into audio element
+        this._audio.src = track.src;
+        
+        // Update state with new track
+        this._state.currentTrack = track;
+        
+        // Find track index in queue (if it exists)
+        const trackIndex = this._queue.findIndex(t => t.id === track.id);
+        this._state.currentQueueIndex = trackIndex !== -1 ? trackIndex : -1;
+        this._state.queueLength = this._queue.length;
+        
+        // Emit trackchange event
+        this._eventEmitter.emit('trackchange', track);
+        this._eventEmitter.emit('statechange', this.getState());
+
+        // Update Media Session API metadata
+        this._updateMediaSession();
+
+        // Start playback
+        await this._audio.play();
+      }
+      // Case 2: Play with index parameter
+      else if (typeof trackOrIndex === 'number') {
+        const index = trackOrIndex;
+        
+        // Validate index
+        if (index < 0 || index >= this._queue.length) {
+          const error: PlayerError = {
+            code: 'VALIDATION_ERROR',
+            message: `Invalid queue index: ${index}. Queue has ${this._queue.length} tracks.`,
+            details: {
+              context: 'play_with_index',
+              timestamp: Date.now(),
+              state: this.getState(),
+            },
+          };
+          this._state.error = error;
+          this._eventEmitter.emit('error', error);
+          return;
+        }
+
+        // Get track at index
+        const track = this._queue[index]!; // Safe: index validated above
+
+        // Set loading state
+        this._state.isLoading = true;
+        this._state.error = null;
+        this._eventEmitter.emit('loading');
+        this._eventEmitter.emit('statechange', this.getState());
+
+        // Load track into audio element
+        this._audio.src = track.src;
+        
+        // Update state with new track
+        this._state.currentTrack = track;
+        this._state.currentQueueIndex = index;
+        this._state.queueLength = this._queue.length;
+        
+        // Emit trackchange event
+        this._eventEmitter.emit('trackchange', track);
+        this._eventEmitter.emit('statechange', this.getState());
+
+        // Update Media Session API metadata
+        this._updateMediaSession();
+
+        // Start playback
+        await this._audio.play();
+      }
+      // Case 3: Play without parameters (resume)
+      else {
+        // Check if there's a current track to resume
+        if (!this._state.currentTrack) {
+          const error: PlayerError = {
+            code: 'STATE_ERROR',
+            message: 'No track loaded. Cannot resume playback.',
+            details: {
+              context: 'play_resume',
+              timestamp: Date.now(),
+              state: this.getState(),
+            },
+          };
+          this._state.error = error;
+          this._eventEmitter.emit('error', error);
+          return;
+        }
+
+        // Check if audio element has a source
+        if (!this._audio.src) {
+          const error: PlayerError = {
+            code: 'STATE_ERROR',
+            message: 'No audio source loaded. Cannot resume playback.',
+            details: {
+              context: 'play_resume',
+              timestamp: Date.now(),
+              state: this.getState(),
+            },
+          };
+          this._state.error = error;
+          this._eventEmitter.emit('error', error);
+          return;
+        }
+
+        // Resume playback
+        await this._audio.play();
+      }
+    } catch (error) {
+      // Handle play() promise rejection (e.g., user interaction required)
+      const playerError: PlayerError = {
+        code: 'MEDIA_LOAD_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to start playback',
+        details: {
+          context: 'play_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+          originalError: error instanceof Error ? error : undefined,
+        },
+      };
+      this._state.error = playerError;
+      this._state.isLoading = false;
+      this._eventEmitter.emit('error', playerError);
+      this._eventEmitter.emit('statechange', this.getState());
+    }
+  }
+
+  /**
+   * Pause audio playback
+   * 
+   * Pauses the currently playing audio and updates player state.
+   * Emits 'pause' and 'statechange' events.
+   * 
+   * Note: The audio element's 'pause' event listener will handle
+   * updating _state.isPlaying and _state.isPaused, as well as
+   * emitting the events.
+   */
+  public pause(): void {
+    // Pause the audio element
+    // The audio element's 'pause' event listener will:
+    // - Update _state.isPlaying = false
+    // - Update _state.isPaused = true
+    // - Emit 'pause' event
+    // - Emit 'statechange' event
+    this._audio.pause();
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Toggle between play and pause states
+   * 
+   * If audio is currently playing, pauses it.
+   * If audio is currently paused or stopped, resumes/starts playback.
+   * 
+   * This method checks _state.isPlaying to determine the current state
+   * and calls the appropriate method (play() or pause()).
+   * 
+   * Requirements: 2.4
+   */
+  public togglePlayPause(): void {
+    if (this._state.isPlaying) {
+      // Currently playing, so pause
+      this.pause();
+    } else {
+      // Currently paused or stopped, so play
+      this.play();
+    }
+  }
+
+  /**
+   * Seek to a specific time in the current track
+   * 
+   * Sets the audio element's currentTime to the specified value.
+   * Validates that the time is within the valid range [0, duration].
+   * Emits 'seeking' and 'seeked' events during the seek operation.
+   * 
+   * @param time - The time to seek to in seconds
+   * 
+   * Requirements: 2.5, 13.3
+   */
+  public seek(time: number): void {
+    // Validate time parameter is a number
+    if (typeof time !== 'number' || isNaN(time)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid seek time: ${time}. Time must be a valid number.`,
+        details: {
+          context: 'seek_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate time is not negative
+    if (time < 0) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid seek time: ${time}. Time cannot be negative.`,
+        details: {
+          context: 'seek_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Check if there's a current track loaded
+    if (!this._state.currentTrack || !this._audio.src) {
+      const error: PlayerError = {
+        code: 'STATE_ERROR',
+        message: 'No track loaded. Cannot seek.',
+        details: {
+          context: 'seek_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Get duration (handle case where duration might not be loaded yet)
+    const duration = this._audio.duration;
+    
+    // If duration is not available yet (NaN or 0), we can't validate the upper bound
+    // but we can still attempt to seek
+    if (!isNaN(duration) && isFinite(duration) && duration > 0) {
+      // Validate time is within valid range [0, duration]
+      if (time > duration) {
+        const error: PlayerError = {
+          code: 'VALIDATION_ERROR',
+          message: `Invalid seek time: ${time}. Time cannot exceed duration (${duration}).`,
+          details: {
+            context: 'seek_method',
+            timestamp: Date.now(),
+            state: this.getState(),
+          },
+        };
+        this._state.error = error;
+        this._eventEmitter.emit('error', error);
+        return;
+      }
+    }
+
+    // Emit 'seeking' event before changing currentTime
+    this._eventEmitter.emit('seeking', time);
+
+    // Set the audio element's currentTime
+    this._audio.currentTime = time;
+
+    // Update state
+    this._state.currentTime = time;
+    this._state.error = null;
+
+    // Emit 'seeked' event after changing currentTime
+    this._eventEmitter.emit('seeked', time);
+    
+    // Emit statechange event
+    this._eventEmitter.emit('statechange', this.getState());
+  }
+
+  /**
+   * Set audio volume
+   * 
+   * Sets the audio element's volume to the specified value.
+   * Automatically clamps the volume to the valid range [0, 1].
+   * Values outside this range are clamped, not rejected.
+   * 
+   * Updates player state and emits 'volumechange' and 'statechange' events.
+   * The audio element's 'volumechange' event listener will also fire,
+   * but we update state directly here to ensure immediate consistency.
+   * 
+   * @param volume - The volume level (will be clamped to [0, 1])
+   * 
+   * Requirements: 2.6, 13.4
+   */
+  public setVolume(volume: number): void {
+    // Validate volume parameter is a number
+    if (typeof volume !== 'number' || isNaN(volume)) {
+      // For invalid values, default to current volume (no change)
+      return;
+    }
+
+    // Clamp volume to [0, 1] range
+    // Values below 0 become 0, values above 1 become 1
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+
+    // Set the audio element's volume
+    // Note: This will trigger the audio element's 'volumechange' event,
+    // which will also update _state.volume and emit events.
+    // However, we update state directly here as well to ensure
+    // immediate consistency before the event fires.
+    this._audio.volume = clampedVolume;
+    this._state.volume = clampedVolume;
+
+    // Emit volumechange event
+    this._eventEmitter.emit('volumechange', clampedVolume);
+    
+    // Emit statechange event
+    this._eventEmitter.emit('statechange', this.getState());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Set audio playback rate
+   * 
+   * Sets the audio element's playback rate (speed) to the specified value.
+   * Typical values range from 0.5 (half speed) to 2.0 (double speed),
+   * but any positive number is valid.
+   * 
+   * Updates player state and emits 'ratechange' and 'statechange' events.
+   * The audio element's 'ratechange' event listener will also fire,
+   * but we update state directly here to ensure immediate consistency.
+   * 
+   * @param rate - The playback rate (must be a positive number)
+   * 
+   * Requirements: 2.7
+   */
+  public setPlaybackRate(rate: number): void {
+    // Validate rate parameter is a number
+    if (typeof rate !== 'number' || isNaN(rate)) {
+      // For invalid values, default to current rate (no change)
+      return;
+    }
+
+    // Validate rate is positive
+    if (rate <= 0) {
+      // For non-positive values, default to current rate (no change)
+      return;
+    }
+
+    // Set the audio element's playback rate
+    // Note: This will trigger the audio element's 'ratechange' event,
+    // which will also update _state.playbackRate and emit events.
+    // However, we update state directly here as well to ensure
+    // immediate consistency before the event fires.
+    this._audio.playbackRate = rate;
+    this._state.playbackRate = rate;
+
+    // Emit ratechange event
+    this._eventEmitter.emit('ratechange', rate);
+    
+    // Emit statechange event
+    this._eventEmitter.emit('statechange', this.getState());
+  }
+
+  /**
+   * Add track(s) to the end of the queue
+   * 
+   * Two usage modes:
+   * 1. addToQueue(track) - Append a single track to the end of the queue
+   * 2. addToQueue([track1, track2, ...]) - Append multiple tracks to the end
+   * 
+   * Updates the queue array and emits 'queuechange' event.
+   * 
+   * @param track - Single Track object or array of Track objects to add
+   * 
+   * Requirements: 3.1, 3.2
+   */
+  public addToQueue(track: Track | Track[]): void {
+    // Normalize input to array for consistent handling
+    const tracksToAdd = Array.isArray(track) ? track : [track];
+
+    // Validate that we have tracks to add
+    if (tracksToAdd.length === 0) {
+      return;
+    }
+
+    // Validate all tracks have required fields
+    for (const t of tracksToAdd) {
+      if (!t.src || !t.title || !t.id) {
+        const error: PlayerError = {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid track: id, src, and title are required',
+          details: {
+            context: 'addToQueue_method',
+            timestamp: Date.now(),
+            state: this.getState(),
+          },
+        };
+        this._state.error = error;
+        this._eventEmitter.emit('error', error);
+        return;
+      }
+    }
+
+    // Append tracks to the end of the queue
+    this._queue.push(...tracksToAdd);
+    this._state.queueLength = this._queue.length;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Add track(s) to play next (after the currently playing track)
+   * 
+   * Two usage modes:
+   * 1. playNext(track) - Insert a single track after current track
+   * 2. playNext([track1, track2, ...]) - Insert multiple tracks after current track
+   * 
+   * If there's a current track playing, inserts after currentQueueIndex.
+   * If no current track, inserts at the beginning of the queue.
+   * 
+   * This is useful for "play next" functionality where users want to hear
+   * a specific track immediately after the current one finishes.
+   * 
+   * @param track - Single Track object or array of Track objects to add
+   * 
+   * Requirements: Queue feature
+   */
+  public playNext(track: Track | Track[]): void {
+    // Normalize input to array for consistent handling
+    const tracksToAdd = Array.isArray(track) ? track : [track];
+
+    // Validate that we have tracks to add
+    if (tracksToAdd.length === 0) {
+      return;
+    }
+
+    // Validate all tracks have required fields
+    for (const t of tracksToAdd) {
+      if (!t.src || !t.title || !t.id) {
+        const error: PlayerError = {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid track: id, src, and title are required',
+          details: {
+            context: 'playNext_method',
+            timestamp: Date.now(),
+            state: this.getState(),
+          },
+        };
+        this._state.error = error;
+        this._eventEmitter.emit('error', error);
+        return;
+      }
+    }
+
+    // Determine insertion index
+    // If there's a current track, insert after it
+    // Otherwise, insert at the beginning
+    const insertIndex = this._state.currentQueueIndex !== -1 
+      ? this._state.currentQueueIndex + 1 
+      : 0;
+
+    // Insert tracks at the calculated index
+    this._queue.splice(insertIndex, 0, ...tracksToAdd);
+    this._state.queueLength = this._queue.length;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Reorder the queue by moving a track from one position to another
+   * 
+   * Moves the track at fromIndex to toIndex, shifting other tracks as needed.
+   * This is useful for drag-and-drop reordering in the UI.
+   * 
+   * If the current track is moved, updates currentQueueIndex to follow it.
+   * If another track is moved across the current track, adjusts currentQueueIndex accordingly.
+   * 
+   * @param fromIndex - The index of the track to move
+   * @param toIndex - The destination index
+   * 
+   * Requirements: Queue feature
+   */
+  public reorderQueue(fromIndex: number, toIndex: number): void {
+    // Validate fromIndex
+    if (typeof fromIndex !== 'number' || isNaN(fromIndex)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid fromIndex: ${fromIndex}. Index must be a valid number.`,
+        details: {
+          context: 'reorderQueue_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate toIndex
+    if (typeof toIndex !== 'number' || isNaN(toIndex)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid toIndex: ${toIndex}. Index must be a valid number.`,
+        details: {
+          context: 'reorderQueue_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate fromIndex is within bounds
+    if (fromIndex < 0 || fromIndex >= this._queue.length) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid fromIndex: ${fromIndex}. Queue has ${this._queue.length} tracks (valid range: 0-${this._queue.length - 1}).`,
+        details: {
+          context: 'reorderQueue_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate toIndex is within bounds
+    if (toIndex < 0 || toIndex >= this._queue.length) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid toIndex: ${toIndex}. Queue has ${this._queue.length} tracks (valid range: 0-${this._queue.length - 1}).`,
+        details: {
+          context: 'reorderQueue_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // If fromIndex === toIndex, no-op
+    if (fromIndex === toIndex) {
+      return;
+    }
+
+    // Remove track from fromIndex
+    const [movedTrack] = this._queue.splice(fromIndex, 1);
+
+    // Insert track at toIndex
+    this._queue.splice(toIndex, 0, movedTrack!); // Safe: we just removed it
+
+    // Update currentQueueIndex if needed
+    const currentIndex = this._state.currentQueueIndex;
+    if (currentIndex !== -1) {
+      if (fromIndex === currentIndex) {
+        // The current track was moved, update to new position
+        this._state.currentQueueIndex = toIndex;
+      } else if (fromIndex < currentIndex && toIndex >= currentIndex) {
+        // A track before current was moved to after current, decrement
+        this._state.currentQueueIndex--;
+      } else if (fromIndex > currentIndex && toIndex <= currentIndex) {
+        // A track after current was moved to before current, increment
+        this._state.currentQueueIndex++;
+      }
+    }
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Load tracks into the queue, optionally replacing existing queue
+   * 
+   * This is useful for loading a user's playlist into the playback queue.
+   * 
+   * Two usage modes:
+   * 1. loadTracksToQueue(tracks) - Replace queue with tracks, don't start playback
+   * 2. loadTracksToQueue(tracks, true) - Replace queue with tracks and start playing first track
+   * 
+   * @param tracks - Array of Track objects to load into queue
+   * @param playImmediately - Whether to start playing the first track (default: false)
+   * 
+   * Requirements: Queue feature
+   */
+  public loadTracksToQueue(tracks: Track[], playImmediately: boolean = false): void {
+    // Validate tracks parameter is an array
+    if (!Array.isArray(tracks)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid tracks parameter: must be an array',
+        details: {
+          context: 'loadTracksToQueue_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate all tracks have required fields
+    for (const t of tracks) {
+      if (!t.src || !t.title || !t.id) {
+        const error: PlayerError = {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid track: id, src, and title are required',
+          details: {
+            context: 'loadTracksToQueue_method',
+            timestamp: Date.now(),
+            state: this.getState(),
+          },
+        };
+        this._state.error = error;
+        this._eventEmitter.emit('error', error);
+        return;
+      }
+    }
+
+    // Replace queue with new tracks
+    this._queue = [...tracks];
+    this._state.queueLength = this._queue.length;
+
+    // Reset current track index
+    this._state.currentQueueIndex = -1;
+    this._state.currentTrack = null;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+
+    // If playImmediately is true and queue is not empty, play first track
+    if (playImmediately && this._queue.length > 0) {
+      this.play(0);
+    }
+  }
+
+  /**
+   * Remove track from the queue at the specified index
+   * 
+   * Removes a track from the queue and updates the currentQueueIndex
+   * if the removal affects the currently playing track.
+   * 
+   * Behavior when removing tracks:
+   * - If removing a track before the current track, decrement currentQueueIndex
+   * - If removing the current track, keep currentQueueIndex the same (next track takes its place)
+   * - If removing a track after the current track, no change to currentQueueIndex
+   * - If queue becomes empty, reset currentQueueIndex to -1
+   * 
+   * @param index - The index of the track to remove
+   * 
+   * Requirements: 3.4
+   */
+  public removeFromQueue(index: number): void {
+    // Validate index parameter is a number
+    if (typeof index !== 'number' || isNaN(index)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid index: ${index}. Index must be a valid number.`,
+        details: {
+          context: 'removeTrack_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate index is within valid range [0, queue.length - 1]
+    if (index < 0 || index >= this._queue.length) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid index: ${index}. queue has ${this._queue.length} tracks (valid range: 0-${this._queue.length - 1}).`,
+        details: {
+          context: 'removeTrack_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Remove the track from the queue
+    this._queue.splice(index, 1);
+    this._state.queueLength = this._queue.length;
+
+    // Update currentQueueIndex if needed
+    if (this._state.currentQueueIndex !== -1) {
+      if (index < this._state.currentQueueIndex) {
+        // Removed a track before the current track, decrement index
+        this._state.currentQueueIndex--;
+      } else if (index === this._state.currentQueueIndex) {
+        // Removed the current track
+        if (this._queue.length === 0) {
+          // queue is now empty, reset to -1
+          this._state.currentQueueIndex = -1;
+          this._state.currentTrack = null;
+        } else if (this._state.currentQueueIndex >= this._queue.length) {
+          // Current index is now out of bounds (was last track), move to new last track
+          this._state.currentQueueIndex = this._queue.length - 1;
+        }
+        // If currentQueueIndex is still valid, the next track takes the removed track's place
+        // so the index stays the same
+      }
+      // If index > currentQueueIndex, no change needed
+    }
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Clear all tracks from the queue
+   * 
+   * Removes all tracks from the queue and resets the current track state.
+   * This is an idempotent operation - calling it multiple times has the same
+   * effect as calling it once.
+   * 
+   * After clearing:
+   * - queue array is empty
+   * - currentQueueIndex is reset to -1
+   * - currentTrack is reset to null
+   * - 'queuechange' event is emitted
+   * 
+   * Note: This does not stop playback if a track is currently playing.
+   * The audio element will continue playing the current track until
+   * explicitly paused or stopped.
+   * 
+   * Requirements: 3.5
+   */
+  public clearQueue(): void {
+    // Clear the queue array
+    this._queue = [];
+    this._state.queueLength = 0;
+
+    // Reset current track state
+    this._state.currentQueueIndex = -1;
+    this._state.currentTrack = null;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit queuechange event
+    this._eventEmitter.emit('queuechange', this.getQueue());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Jump to a specific position in the queue without starting playback
+   * 
+   * Sets the track at the specified queue index as the current track,
+   * but does NOT start playback. Use play() to start playback after jumping.
+   * 
+   * Validates that the index is within queue bounds. If invalid, emits an error
+   * and does not change state.
+   * 
+   * Emits 'trackchange' event with the new current track.
+   * 
+   * @param index - The queue index to jump to
+   * @param autoPlay - Optional flag to automatically start playback (default: false)
+   * 
+   * Requirements: 3.6
+   */
+  public jumpToQueueIndex(index: number, autoPlay: boolean = false): void {
+    // Validate index parameter is a number
+    if (typeof index !== 'number' || isNaN(index)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid index: ${index}. Index must be a valid number.`,
+        details: {
+          context: 'jumpToQueueIndex_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Validate index is within valid range [0, queue.length - 1]
+    if (index < 0 || index >= this._queue.length) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid index: ${index}. Queue has ${this._queue.length} tracks (valid range: 0-${this._queue.length - 1}).`,
+        details: {
+          context: 'jumpToQueueIndex_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Get track at index
+    const track = this._queue[index]!; // Safe: index validated above
+
+    // Update current track state
+    this._state.currentTrack = track;
+    this._state.currentQueueIndex = index;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit trackchange event
+    this._eventEmitter.emit('trackchange', track);
+    this._eventEmitter.emit('statechange', this.getState());
+
+    // Update Media Session API metadata
+    this._updateMediaSession();
+
+    // Auto-play if requested
+    if (autoPlay) {
+      this.play();
+    }
+  }
+
+  /**
+   * Get the index of the next track based on current repeat mode
+   * 
+   * This helper method determines which track should play next based on:
+   * - Current track index
+   * - queue length
+   * - Repeat mode setting
+   * 
+   * Behavior by repeat mode:
+   * - 'none': Returns next index, or -1 if at end of queue
+   * - 'one': Returns current index (repeat same track)
+   * - 'all': Returns next index, wrapping to 0 at end of queue
+   * 
+   * @returns The index of the next track, or -1 if no next track
+   * @private
+   * 
+   * Requirements: 3.7, 4.1, 4.2, 4.3
+   */
+  private _getNextTrackIndex(): number {
+    const currentIndex = this._state.currentQueueIndex;
+    const queueLength = this._queue.length;
+
+    // If queue is empty, no next track
+    if (queueLength === 0) {
+      return -1;
+    }
+
+    // Handle different repeat modes
+    switch (this._state.repeatMode) {
+      case 'one':
+        // Repeat current track - stay on same index
+        return currentIndex;
+
+      case 'all':
+        // Repeat all - loop back to beginning after last track
+        return (currentIndex + 1) % queueLength;
+
+      case 'none':
+      default:
+        // No repeat - stop at end of queue
+        return currentIndex + 1 < queueLength ? currentIndex + 1 : -1;
+    }
+  }
+
+  /**
+   * Get the index of the previous track based on current repeat mode and playback time
+   * 
+   * This helper method determines which track should play when going backwards based on:
+   * - Current playback time (if > 3 seconds, restart current track)
+   * - Current track index
+   * - queue length
+   * - Repeat mode setting
+   * 
+   * Behavior:
+   * - If currentTime > 3 seconds: Returns current index (restart current track)
+   * - If currentTime <= 3 seconds:
+   *   - 'none': Returns previous index, or -1 if at beginning of queue
+   *   - 'one': Returns current index (stay on same track)
+   *   - 'all': Returns previous index, wrapping to last track at beginning of queue
+   * 
+   * @returns The index of the previous track, or -1 if no previous track
+   * @private
+   * 
+   * Requirements: 3.8
+   */
+  private _getPreviousTrackIndex(): number {
+    const currentIndex = this._state.currentQueueIndex;
+    const queueLength = this._queue.length;
+
+    // If queue is empty, no previous track
+    if (queueLength === 0) {
+      return -1;
+    }
+
+    // If more than 3 seconds into the track, restart current track
+    if (this._state.currentTime > 3) {
+      return currentIndex;
+    }
+
+    // Handle different repeat modes
+    switch (this._state.repeatMode) {
+      case 'one':
+        // Repeat current track - stay on same index
+        return currentIndex;
+
+      case 'all':
+        // Repeat all - loop to end when at beginning
+        return currentIndex - 1 < 0 ? queueLength - 1 : currentIndex - 1;
+
+      case 'none':
+      default:
+        // No repeat - stop at beginning of queue
+        return currentIndex - 1 >= 0 ? currentIndex - 1 : -1;
+    }
+  }
+
+  /**
+   * Advance to the next track in the queue
+   * 
+   * Uses _getNextTrackIndex() to determine the next track based on repeat mode.
+   * If a valid next track exists, starts playback of that track.
+   * If no next track exists (returns -1), stops playback.
+   * 
+   * Behavior by repeat mode:
+   * - 'none': Advances to next track, stops at end of queue
+   * - 'one': Restarts current track
+   * - 'all': Advances to next track, loops to beginning at end
+   * 
+   * Requirements: 3.7
+   */
+  public next(): void {
+    // Get the index of the next track
+    const nextIndex = this._getNextTrackIndex();
+
+    // Check if there's a valid next track
+    if (nextIndex === -1) {
+      // No next track available, stop playback
+      this.pause();
+    } else {
+      // Valid next track, start playback
+      this.play(nextIndex);
+    }
+  }
+
+  /**
+   * Go back to the previous track in the queue
+   * 
+   * Uses _getPreviousTrackIndex() to determine the previous track based on:
+   * - Current playback time (3-second restart rule)
+   * - Repeat mode setting
+   * 
+   * If a valid previous track exists, starts playback of that track.
+   * If no previous track exists (returns -1), stops playback.
+   * 
+   * Behavior:
+   * - If currentTime > 3 seconds: Restarts current track from beginning
+   * - If currentTime <= 3 seconds:
+   *   - 'none': Goes to previous track, stops at beginning of queue
+   *   - 'one': Restarts current track
+   *   - 'all': Goes to previous track, loops to end at beginning
+   * 
+   * Requirements: 3.8
+   */
+  public previous(): void {
+    // Get the index of the previous track
+    const previousIndex = this._getPreviousTrackIndex();
+
+    // Check if there's a valid previous track
+    if (previousIndex === -1) {
+      // No previous track available, stop playback
+      this.pause();
+    } else {
+      // Valid previous track, start playback
+      this.play(previousIndex);
+    }
+  }
+
+  /**
+   * Set the repeat mode for queue playback
+   * 
+   * Controls how the player behaves when reaching the end of a track or queue:
+   * - 'none': Stop playback when the queue ends
+   * - 'one': Repeat the current track indefinitely
+   * - 'all': Restart the queue from the beginning when it ends
+   * 
+   * Validates that the mode parameter is one of the three valid values.
+   * Updates player state and emits 'statechange' event.
+   * 
+   * @param mode - The repeat mode to set ('none', 'one', or 'all')
+   * 
+   * Requirements: 4.1, 4.2, 4.3
+   */
+  public setRepeatMode(mode: RepeatMode): void {
+    // Validate mode parameter is one of the valid values
+    const validModes: RepeatMode[] = ['none', 'one', 'all'];
+    if (!validModes.includes(mode)) {
+      const error: PlayerError = {
+        code: 'VALIDATION_ERROR',
+        message: `Invalid repeat mode: "${mode}". Must be one of: 'none', 'one', 'all'.`,
+        details: {
+          context: 'setRepeatMode_method',
+          timestamp: Date.now(),
+          state: this.getState(),
+        },
+      };
+      this._state.error = error;
+      this._eventEmitter.emit('error', error);
+      return;
+    }
+
+    // Update the repeat mode in state
+    this._state.repeatMode = mode;
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit statechange event
+    this._eventEmitter.emit('statechange', this.getState());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Shuffle the queue using Fisher-Yates algorithm
+   * 
+   * Randomizes the order of tracks in the queue while preserving the current track
+   * at its current index position. This ensures that the currently playing track
+   * continues to play uninterrupted when shuffle is enabled.
+   * 
+   * Algorithm:
+   * 1. Save the original queue order to _originalQueue for later restoration
+   * 2. Apply Fisher-Yates shuffle to randomize track order
+   * 3. If there's a current track, ensure it stays at the current index position
+   * 4. Emit 'queuechange' event to notify subscribers
+   * 
+   * The Fisher-Yates shuffle algorithm provides a uniform random permutation
+   * of the queue, ensuring each possible ordering has equal probability.
+   * 
+   * Edge cases:
+   * - Empty queue: No-op, returns immediately
+   * - Single track: No-op, returns immediately
+   * - No current track: Shuffles entire queue without preservation
+   * 
+   * @private
+   * 
+   * Requirements: 4.4
+   */
+  private _shuffleQueue(): void {
+    // Handle edge case: empty or single-track queue
+    if (this._queue.length <= 1) {
+      return;
+    }
+
+    // Save original queue order for unshuffle operation
+    this._originalQueue = [...this._queue];
+
+    // Get current track before shuffling
+    const currentTrack = this._state.currentTrack;
+    const currentIndex = this._state.currentQueueIndex;
+
+    // Apply Fisher-Yates shuffle algorithm
+    // Start from the end and swap each element with a random element before it
+    for (let i = this._queue.length - 1; i > 0; i--) {
+      // Generate random index from 0 to i (inclusive)
+      const j = Math.floor(Math.random() * (i + 1));
+      
+      // Swap elements at indices i and j
+      // Safe: indices are guaranteed to be valid by loop bounds
+      const temp = this._queue[i]!;
+      this._queue[i] = this._queue[j]!;
+      this._queue[j] = temp;
+    }
+
+    // Preserve current track at current index position
+    // This ensures the currently playing track doesn't change position
+    if (currentTrack && currentIndex !== -1) {
+      // Find where the current track ended up after shuffling
+      const shuffledIndex = this._queue.findIndex(t => t.id === currentTrack.id);
+      
+      // If found and not already at the current index, swap it back
+      if (shuffledIndex !== -1 && shuffledIndex !== currentIndex) {
+        // Swap current track back to its original index
+        // Safe: indices are guaranteed to be valid by the checks above
+        const temp = this._queue[currentIndex]!;
+        this._queue[currentIndex] = this._queue[shuffledIndex]!;
+        this._queue[shuffledIndex] = temp;
+      }
+    }
+
+    // Emit queuechange event to notify subscribers
+    this._eventEmitter.emit('queuechange', this.getQueue());
+  }
+
+  /**
+   * Restore the original queue order (unshuffle)
+   * 
+   * Restores the queue to its original order before shuffling by copying
+   * from _originalQueue. Updates the currentQueueIndex to match where the
+   * current track is located in the restored order.
+   * 
+   * This method is called when shuffle is disabled (toggled off) to return
+   * the queue to its pre-shuffle state.
+   * 
+   * Algorithm:
+   * 1. Restore _queue from _originalQueue
+   * 2. If there's a current track, find its new index in the restored queue
+   * 3. Update currentQueueIndex to the new position
+   * 4. Emit 'queuechange' event to notify subscribers
+   * 
+   * Edge cases:
+   * - Empty queue: No-op, returns immediately
+   * - No original queue saved: No-op, returns immediately
+   * - Current track not found: Keep currentQueueIndex as -1
+   * 
+   * @private
+   * 
+   * Requirements: 4.5
+   */
+  private _unshuffleQueue(): void {
+    // Handle edge case: no original queue saved
+    if (this._originalQueue.length === 0) {
+      return;
+    }
+
+    // Get current track before restoring queue
+    const currentTrack = this._state.currentTrack;
+
+    // Restore queue from original order
+    this._queue = [...this._originalQueue];
+
+    // Update currentQueueIndex to match current track in restored order
+    if (currentTrack) {
+      // Find where the current track is in the restored queue
+      const restoredIndex = this._queue.findIndex(t => t.id === currentTrack.id);
+      
+      // Update the current track index
+      // If track is found, use its index; otherwise, keep as -1
+      this._state.currentQueueIndex = restoredIndex;
+    } else {
+      // No current track, reset index to -1
+      this._state.currentQueueIndex = -1;
+    }
+
+    // Clear the original queue since we've restored it
+    this._originalQueue = [];
+
+    // Emit queuechange event to notify subscribers
+    this._eventEmitter.emit('queuechange', this.getQueue());
+  }
+
+  /**
+   * Toggle shuffle mode on or off
+   * 
+   * Toggles between shuffled and unshuffled queue states:
+   * - If shuffle is currently OFF: Enables shuffle by calling _shufflequeue()
+   * - If shuffle is currently ON: Disables shuffle by calling _unshufflequeue()
+   * 
+   * When enabling shuffle:
+   * - Randomizes queue order using Fisher-Yates algorithm
+   * - Preserves current track at current index position
+   * - Saves original order for later restoration
+   * - Sets _state.isShuffling to true
+   * 
+   * When disabling shuffle:
+   * - Restores original queue order
+   * - Updates current track index to match restored position
+   * - Sets _state.isShuffling to false
+   * 
+   * Emits 'statechange' event after toggling.
+   * Triggers state persistence to save shuffle preference.
+   * 
+   * Requirements: 4.4, 4.5
+   */
+  public toggleShuffle(): void {
+    // Check current shuffle state
+    if (this._state.isShuffling) {
+      // Currently shuffled, so unshuffle
+      this._unshuffleQueue();
+      this._state.isShuffling = false;
+    } else {
+      // Currently not shuffled, so shuffle
+      this._shuffleQueue();
+      this._state.isShuffling = true;
+    }
+
+    // Clear any previous errors
+    this._state.error = null;
+
+    // Emit statechange event
+    this._eventEmitter.emit('statechange', this.getState());
+
+    // Trigger state persistence
+    this._persistState();
+  }
+
+  /**
+   * Load persisted state from localStorage
+   * 
+   * Restores the player state from a previous session by loading from localStorage.
+   * This method is called during player initialization to restore:
+   * - Volume level
+   * - Playback rate
+   * - Repeat mode
+   * - Shuffle state
+   * - queue
+   * - Current track and playback position
+   * 
+   * Handles various error conditions gracefully:
+   * - localStorage unavailable (private browsing, disabled)
+   * - No persisted state found (first run)
+   * - Corrupted or invalid JSON data
+   * - Schema version mismatches
+   * - Invalid or missing required fields
+   * 
+   * When errors occur, the player falls back to default state and continues
+   * initialization normally. Errors are logged to console for debugging.
+   * 
+   * Note: This method does NOT automatically start playback. It only restores
+   * the state. The user must explicitly call play() to resume playback.
+   * 
+   * @private
+   * 
+   * Requirements: 1.2, 6.4, 6.5, 6.6, 6.7
+   */
+  private _loadPersistedState(): void {
+    // Check if persistence is enabled in config
+    if (!this._config.persistState) {
+      return;
+    }
+
+    try {
+      // Attempt to load persisted state from localStorage
+      const serialized = localStorage.getItem(this._config.persistenceKey);
+
+      // Check if any persisted state exists
+      if (!serialized) {
+        // No persisted state found (first run or cleared storage)
+        // This is not an error, just continue with default state
+        return;
+      }
+
+      // Parse JSON data
+      let persistedState: any;
+      try {
+        persistedState = JSON.parse(serialized);
+      } catch (parseError) {
+        // JSON parsing failed - data is corrupted
+        console.warn('[MakeNoise] Failed to parse persisted state - data may be corrupted:', parseError);
+        // Clear corrupted data and continue with default state
+        localStorage.removeItem(this._config.persistenceKey);
+        return;
+      }
+
+      // Validate that parsed data is an object
+      if (!persistedState || typeof persistedState !== 'object') {
+        console.warn('[MakeNoise] Invalid persisted state format - expected object');
+        localStorage.removeItem(this._config.persistenceKey);
+        return;
+      }
+
+      // Check schema version for potential migrations
+      // For now, we only support the current version
+      if (persistedState.version !== PERSISTENCE_SCHEMA_VERSION) {
+        console.warn(
+          `[MakeNoise] Persisted state schema version mismatch (found: ${persistedState.version}, expected: ${PERSISTENCE_SCHEMA_VERSION})`
+        );
+        // In the future, we could implement schema migrations here
+        // For now, clear old version data and continue with default state
+        localStorage.removeItem(this._config.persistenceKey);
+        return;
+      }
+
+      // Restore volume (with validation)
+      if (typeof persistedState.volume === 'number' && 
+          !isNaN(persistedState.volume) &&
+          persistedState.volume >= 0 && 
+          persistedState.volume <= 1) {
+        this._state.volume = persistedState.volume;
+        this._audio.volume = persistedState.volume;
+      }
+
+      // Restore playback rate (with validation)
+      if (typeof persistedState.playbackRate === 'number' && 
+          !isNaN(persistedState.playbackRate) &&
+          persistedState.playbackRate > 0) {
+        this._state.playbackRate = persistedState.playbackRate;
+        this._audio.playbackRate = persistedState.playbackRate;
+      }
+
+      // Restore repeat mode (with validation)
+      const validRepeatModes: RepeatMode[] = ['none', 'one', 'all'];
+      if (validRepeatModes.includes(persistedState.repeatMode)) {
+        this._state.repeatMode = persistedState.repeatMode;
+      }
+
+      // Restore shuffle state (with validation)
+      if (typeof persistedState.isShuffling === 'boolean') {
+        this._state.isShuffling = persistedState.isShuffling;
+      }
+
+      // Restore queue (with validation)
+      if (Array.isArray(persistedState.queue)) {
+        // Validate each track in the queue
+        const validTracks: Track[] = [];
+        for (const track of persistedState.queue) {
+          // Check that track has required fields
+          if (track && 
+              typeof track === 'object' &&
+              typeof track.id === 'string' &&
+              typeof track.src === 'string' &&
+              typeof track.title === 'string') {
+            // Create full Track object from simplified track
+            const fullTrack: Track = {
+              id: track.id,
+              src: track.src,
+              title: track.title,
+              artist: track.artist,
+              artwork: track.artwork,
+            };
+            validTracks.push(fullTrack);
+          } else {
+            // Skip invalid tracks but log warning
+            console.warn('[MakeNoise] Skipping invalid track in persisted queue:', track);
+          }
+        }
+
+        // Set the validated queue
+        this._queue = validTracks;
+      }
+
+      // Restore current track (with validation)
+      if (persistedState.currentTrackId && typeof persistedState.currentTrackId === 'string') {
+        // Find the track in the restored queue
+        const trackIndex = this._queue.findIndex(t => t.id === persistedState.currentTrackId);
+        
+        if (trackIndex !== -1) {
+          // Track found in queue
+          const track = this._queue[trackIndex]!; // Safe: trackIndex validated above
+          this._state.currentTrack = track;
+          this._state.currentQueueIndex = trackIndex;
+
+          // Load the track into the audio element (but don't start playback)
+          this._audio.src = track.src;
+
+          // Restore playback position (with validation)
+          if (typeof persistedState.currentTime === 'number' && 
+              !isNaN(persistedState.currentTime) &&
+              persistedState.currentTime >= 0) {
+            // Set currentTime on audio element
+            // Note: This may not take effect until metadata is loaded
+            // The audio element will clamp to valid range automatically
+            this._audio.currentTime = persistedState.currentTime;
+            this._state.currentTime = persistedState.currentTime;
+          }
+        } else {
+          // Current track ID not found in queue
+          // This can happen if the queue was modified externally
+          console.warn(`[MakeNoise] Current track ID "${persistedState.currentTrackId}" not found in persisted queue`);
+        }
+      }
+
+      // If shuffle was enabled, we need to save the original queue
+      // However, we don't have the original order anymore, so we just
+      // keep the current order as-is. The user can toggle shuffle off/on
+      // to get a new shuffle order if desired.
+      if (this._state.isShuffling && this._queue.length > 0) {
+        // Save current queue as original for future unshuffle
+        this._originalQueue = [...this._queue];
+      }
+
+    } catch (error) {
+      // Handle any unexpected errors during state loading
+      // This includes localStorage access errors (SecurityError, etc.)
+      console.warn('[MakeNoise] Failed to load persisted state:', error);
+      
+      // Continue with default state - don't let persistence errors
+      // prevent the player from initializing
+      
+      // Optionally emit error event for application-level handling
+      const playerError: PlayerError = {
+        code: 'STATE_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to load persisted state from localStorage',
+        details: {
+          context: '_loadPersistedState',
+          timestamp: Date.now(),
+          state: this.getState(),
+          originalError: error instanceof Error ? error : undefined,
+        },
+      };
+      
+      // Note: We don't update _state.error here because persistence failures
+      // should not interrupt normal player operation. We just emit the error
+      // event for applications that want to handle it.
+      this._eventEmitter.emit('error', playerError);
+    }
+  }
+
+  /**
+   * Update Media Session API metadata
+   * 
+   * Updates the browser's Media Session API with the current track information.
+   * This allows the track to be displayed in:
+   * - Browser media controls (Chrome, Firefox, etc.)
+   * - OS-level media controls (Windows, macOS, Linux)
+   * - Lock screen controls (mobile devices)
+   * - Notification controls
+   * 
+   * The Media Session API provides a standardized way to integrate with
+   * native media controls across different platforms and browsers.
+   * 
+   * Metadata includes:
+   * - title: Track title
+   * - artist: Track artist (optional)
+   * - album: Not used (could be added in future)
+   * - artwork: Array of artwork images with different sizes
+   * 
+   * Browser support:
+   * - Chrome/Edge: Full support
+   * - Firefox: Full support
+   * - Safari: Partial support (iOS 13.4+, macOS 10.15+)
+   * 
+   * Gracefully handles:
+   * - Missing navigator.mediaSession (unsupported browsers)
+   * - Missing MediaMetadata constructor (older browsers)
+   * - Missing track information (uses defaults)
+   * - Disabled Media Session in config
+   * 
+   * @private
+   * 
+   * Requirements: 7.1
+   */
+  private _updateMediaSession(): void {
+    // Check if Media Session API integration is enabled in config
+    if (!this._config.enableMediaSession) {
+      return;
+    }
+
+    // Check if Media Session API is available in the browser
+    // This will be undefined in older browsers or unsupported environments
+    if (!('mediaSession' in navigator) || !navigator.mediaSession) {
+      return;
+    }
+
+    // Check if MediaMetadata constructor is available
+    // Some browsers support mediaSession but not MediaMetadata
+    if (typeof MediaMetadata === 'undefined') {
+      return;
+    }
+
+    // Get current track
+    const track = this._state.currentTrack;
+
+    // If no current track, clear the metadata
+    if (!track) {
+      try {
+        navigator.mediaSession.metadata = null;
+      } catch (error) {
+        // Silently handle errors - Media Session API failures should not
+        // interrupt player operation
+        console.warn('[MakeNoise] Failed to clear Media Session metadata:', error);
+      }
+      return;
+    }
+
+    try {
+      // Create MediaMetadata object with track information
+      // MediaMetadata requires at least a title
+      const metadata = new MediaMetadata({
+        title: track.title || 'Unknown Title',
+        artist: track.artist || 'Unknown Artist',
+        album: '', // Not used in our Track interface, but required by some browsers
+        artwork: track.artwork ? [
+          // Provide artwork in multiple sizes for different display contexts
+          // Browsers will choose the most appropriate size
+          { src: track.artwork, sizes: '96x96', type: 'image/png' },
+          { src: track.artwork, sizes: '128x128', type: 'image/png' },
+          { src: track.artwork, sizes: '192x192', type: 'image/png' },
+          { src: track.artwork, sizes: '256x256', type: 'image/png' },
+          { src: track.artwork, sizes: '384x384', type: 'image/png' },
+          { src: track.artwork, sizes: '512x512', type: 'image/png' },
+        ] : [],
+      });
+
+      // Set the metadata on the Media Session API
+      navigator.mediaSession.metadata = metadata;
+    } catch (error) {
+      // Handle any errors during metadata creation or assignment
+      // This can happen if:
+      // - MediaMetadata constructor throws (invalid data)
+      // - navigator.mediaSession.metadata setter throws
+      // - Browser has partial/buggy Media Session API implementation
+      
+      // Log error for debugging but don't interrupt player operation
+      console.warn('[MakeNoise] Failed to update Media Session metadata:', error);
+      
+      // Optionally emit error event for application-level handling
+      const playerError: PlayerError = {
+        code: 'STATE_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to update Media Session metadata',
+        details: {
+          context: '_updateMediaSession',
+          timestamp: Date.now(),
+          state: this.getState(),
+          originalError: error instanceof Error ? error : undefined,
+        },
+      };
+      
+      // Note: We don't update _state.error here because Media Session failures
+      // should not interrupt normal player operation. We just emit the error
+      // event for applications that want to handle it.
+      this._eventEmitter.emit('error', playerError);
+    }
+  }
+
+  /**
+   * Set up Media Session API action handlers
+   * 
+   * Registers action handlers with the Media Session API to enable control
+   * of playback through native browser and OS controls. This allows users to
+   * control the player using:
+   * - Browser media controls (Chrome, Firefox, etc.)
+   * - OS-level media controls (Windows Media Keys, macOS Touch Bar, etc.)
+   * - Lock screen controls (mobile devices)
+   * - Notification controls
+   * - Hardware media keys (play/pause, next, previous)
+   * 
+   * Registered actions:
+   * - 'play': Resumes playback by calling play()
+   * - 'pause': Pauses playback by calling pause()
+   * - 'previoustrack': Goes to previous track by calling previous()
+   * - 'nexttrack': Goes to next track by calling next()
+   * - 'seekto': Seeks to a specific time by calling seek()
+   * 
+   * Browser support:
+   * - Chrome/Edge: Full support for all actions
+   * - Firefox: Full support for all actions
+   * - Safari: Partial support (iOS 13.4+, macOS 10.15+)
+   * 
+   * Gracefully handles:
+   * - Missing navigator.mediaSession (unsupported browsers)
+   * - Missing setActionHandler method (older browsers)
+   * - Disabled Media Session in config
+   * 
+   * @private
+   * 
+   * Requirements: 7.2, 7.3, 7.4, 7.5, 7.6
+   */
+  private _setupMediaSessionActionHandlers(): void {
+    // Check if Media Session API integration is enabled in config
+    if (!this._config.enableMediaSession) {
+      return;
+    }
+
+    // Check if Media Session API is available in the browser
+    // This will be undefined in older browsers or unsupported environments
+    if (!('mediaSession' in navigator) || !navigator.mediaSession) {
+      return;
+    }
+
+    // Check if setActionHandler method is available
+    // Some browsers support mediaSession but not action handlers
+    if (typeof navigator.mediaSession.setActionHandler !== 'function') {
+      return;
+    }
+
+    try {
+      // Register 'play' action handler
+      // Called when user presses play button in native controls
+      navigator.mediaSession.setActionHandler('play', () => {
+        this.play();
+      });
+
+      // Register 'pause' action handler
+      // Called when user presses pause button in native controls
+      navigator.mediaSession.setActionHandler('pause', () => {
+        this.pause();
+      });
+
+      // Register 'previoustrack' action handler
+      // Called when user presses previous button in native controls
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        this.previous();
+      });
+
+      // Register 'nexttrack' action handler
+      // Called when user presses next button in native controls
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        this.next();
+      });
+
+      // Register 'seekto' action handler
+      // Called when user seeks to a specific time in native controls
+      // The details parameter contains the seekTime property
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && details.seekTime !== null) {
+          this.seek(details.seekTime);
+        }
+      });
+    } catch (error) {
+      // Handle any errors during action handler registration
+      // This can happen if:
+      // - setActionHandler throws (invalid action name)
+      // - Browser has partial/buggy Media Session API implementation
+      
+      // Log error for debugging but don't interrupt player operation
+      console.warn('[MakeNoise] Failed to register Media Session action handlers:', error);
+      
+      // Optionally emit error event for application-level handling
+      const playerError: PlayerError = {
+        code: 'STATE_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to register Media Session action handlers',
+        details: {
+          context: '_setupMediaSessionActionHandlers',
+          timestamp: Date.now(),
+          state: this.getState(),
+          originalError: error instanceof Error ? error : undefined,
+        },
+      };
+      
+      // Note: We don't update _state.error here because Media Session failures
+      // should not interrupt normal player operation. We just emit the error
+      // event for applications that want to handle it.
+      this._eventEmitter.emit('error', playerError);
+    }
+  }
+
+  /**
+   * Set up global keyboard shortcuts
+   * 
+   * Registers a global keydown event listener to enable keyboard control of playback.
+   * Shortcuts work when the player is active but should not interfere with text input
+   * fields or other interactive elements.
+   * 
+   * Keyboard shortcuts:
+   * - Space: Toggle play/pause
+   * - M: Toggle mute (sets volume to 0 or restores previous volume)
+   * - Right Arrow: Seek forward 10 seconds
+   * - Left Arrow: Seek backward 10 seconds
+   * - Up Arrow: Increase volume by 0.1 (10%)
+   * - Down Arrow: Decrease volume by 0.1 (10%)
+   * 
+   * The shortcuts are disabled when:
+   * - User is typing in an input field (input, textarea, select)
+   * - User is typing in a contenteditable element
+   * - Keyboard shortcuts are disabled in config
+   * 
+   * Prevents default browser behavior for handled keys to avoid conflicts
+   * (e.g., Space scrolling the page, Arrow keys scrolling).
+   * 
+   * @private
+   * 
+   * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
+   */
+  private _setupKeyboardShortcuts(): void {
+    // Check if keyboard shortcuts are enabled in config
+    if (!this._config.enableKeyboardShortcuts) {
+      return;
+    }
+
+    // Store previous volume for mute/unmute toggle
+    let previousVolume = this._state.volume;
+
+    // Add global keydown event listener
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      // Check if user is typing in an input field or contenteditable element
+      // We don't want to interfere with text input
+      const target = event.target as HTMLElement;
+      const isInputField = 
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable;
+
+      // If user is typing, don't handle keyboard shortcuts
+      if (isInputField) {
+        return;
+      }
+
+      // Handle different keys
+      switch (event.key) {
+        case ' ': // Space key - toggle play/pause
+          event.preventDefault(); // Prevent page scroll
+          this.togglePlayPause();
+          break;
+
+        case 'm': // M key - toggle mute
+        case 'M':
+          event.preventDefault();
+          // Toggle mute by setting volume to 0 or restoring previous volume
+          if (this._state.volume > 0) {
+            // Currently not muted, so mute
+            previousVolume = this._state.volume;
+            this.setVolume(0);
+          } else {
+            // Currently muted, so unmute
+            // Restore previous volume, or default to 1.0 if previous was also 0
+            this.setVolume(previousVolume > 0 ? previousVolume : 1.0);
+          }
+          break;
+
+        case 'ArrowRight': // Right arrow - seek forward 10 seconds
+          event.preventDefault(); // Prevent page scroll
+          // Seek forward by 10 seconds
+          // The seek() method will handle validation and clamping to duration
+          this.seek(this._state.currentTime + 10);
+          break;
+
+        case 'ArrowLeft': // Left arrow - seek backward 10 seconds
+          event.preventDefault(); // Prevent page scroll
+          // Seek backward by 10 seconds
+          // The seek() method will handle validation and clamping to 0
+          this.seek(this._state.currentTime - 10);
+          break;
+
+        case 'ArrowUp': // Up arrow - increase volume by 0.1
+          event.preventDefault(); // Prevent page scroll
+          // Increase volume by 0.1 (10%)
+          // The setVolume() method will handle clamping to [0, 1]
+          this.setVolume(this._state.volume + 0.1);
+          break;
+
+        case 'ArrowDown': // Down arrow - decrease volume by 0.1
+          event.preventDefault(); // Prevent page scroll
+          // Decrease volume by 0.1 (10%)
+          // The setVolume() method will handle clamping to [0, 1]
+          this.setVolume(this._state.volume - 0.1);
+          break;
+
+        // No default case - ignore other keys
+      }
+    };
+
+    // Register the global keydown listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Note: We don't provide a cleanup method here because the player is a singleton
+    // that persists for the lifetime of the application. If cleanup is needed in the
+    // future, we could store the handler reference and provide a destroy() method.
+  }
+
+  /**
+   * Persist current player state to localStorage
+   * 
+   * Saves the current player state to localStorage for restoration across sessions.
+   * Creates a simplified representation of the state to reduce storage size:
+   * - Stores only essential track information (id, src, title, artist, artwork)
+   * - Omits runtime state like isPlaying, isPaused, isLoading, error
+   * - Includes current track ID, playback position, volume, rate, modes, and queue
+   * 
+   * Handles localStorage errors gracefully:
+   * - Quota exceeded errors (storage full)
+   * - Security errors (private browsing mode)
+   * - Other storage errors
+   * 
+   * Errors are logged to console but do not interrupt player operation.
+   * 
+   * Storage schema:
+   * - version: Schema version for future migrations
+   * - currentTrackId: ID of current track (null if none)
+   * - currentTime: Current playback position in seconds
+   * - volume: Volume level [0, 1]
+   * - playbackRate: Playback speed
+   * - repeatMode: Repeat mode ('none', 'one', 'all')
+   * - isShuffling: Shuffle state
+   * - queue: Simplified track array
+   * 
+   * @private
+   * 
+   * Requirements: 1.5, 6.1, 6.2, 6.3
+   */
+  private _persistState(): void {
+    // Check if persistence is enabled in config
+    if (!this._config.persistState) {
+      return;
+    }
+
+    try {
+      // Create simplified queue to reduce storage size
+      // Only store essential track information
+      const simplifiedQueue: SimplifiedTrack[] = this._queue.map(track => ({
+        id: track.id,
+        src: track.src,
+        title: track.title,
+        artist: track.artist,
+        artwork: track.artwork,
+      }));
+
+      // Create persisted state object
+      const persistedState: PersistedState = {
+        version: PERSISTENCE_SCHEMA_VERSION,
+        currentTrackId: this._state.currentTrack?.id ?? null,
+        currentTime: this._state.currentTime,
+        volume: this._state.volume,
+        playbackRate: this._state.playbackRate,
+        repeatMode: this._state.repeatMode,
+        isShuffling: this._state.isShuffling,
+        queue: simplifiedQueue,
+        currentQueueIndex: this._state.currentQueueIndex,
+      };
+
+      // Serialize to JSON and save to localStorage
+      const serialized = JSON.stringify(persistedState);
+      localStorage.setItem(this._config.persistenceKey, serialized);
+    } catch (error) {
+      // Handle localStorage errors gracefully
+      // Common errors:
+      // - QuotaExceededError: Storage quota exceeded
+      // - SecurityError: Access denied (private browsing, etc.)
+      // - Other errors: Serialization issues, etc.
+      
+      // Log error to console for debugging
+      console.warn('[MakeNoise] Failed to persist state to localStorage:', error);
+      
+      // Emit error event for application-level handling
+      const playerError: PlayerError = {
+        code: 'STATE_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to persist state to localStorage',
+        details: {
+          context: '_persistState',
+          timestamp: Date.now(),
+          state: this.getState(),
+          originalError: error instanceof Error ? error : undefined,
+        },
+      };
+      
+      // Note: We don't update _state.error here because persistence failures
+      // should not interrupt normal player operation. We just emit the error
+      // event for applications that want to handle it.
+      this._eventEmitter.emit('error', playerError);
+    }
+  }
+
+  /**
+   * Handle errors in a centralized way
+   * 
+   * This method provides centralized error handling for the player. It should be
+   * called whenever an error occurs (media loading failures, validation errors,
+   * network errors, etc.).
+   * 
+   * The method:
+   * 1. Creates a standardized PlayerError object with code, message, and details
+   * 2. Updates the player state error property
+   * 3. Emits an 'error' event for application-level handling
+   * 4. Logs the error to console in development mode for debugging
+   * 
+   * Error details include:
+   * - context: String describing where the error occurred
+   * - timestamp: When the error occurred
+   * - state: Current player state snapshot
+   * - originalError: Original Error object if available
+   * 
+   * @param code - The error code identifying the error type
+   * @param message - Human-readable error message
+   * @param context - String describing where the error occurred (e.g., 'play_method', 'seek_method')
+   * @param originalError - Optional original Error object that caused this error
+   * @private
+   * 
+   * Requirements: 13.1, 13.2, 13.3, 13.5, 13.6
+   */
+  // @ts-ignore - Method is tested and will be used for error handling in future tasks
+  private _handleError(
+    code: PlayerErrorCode,
+    message: string,
+    context: string,
+    originalError?: Error
+  ): void {
+    // Create standardized PlayerError object
+    const playerError: PlayerError = {
+      code,
+      message,
+      details: {
+        context,
+        timestamp: Date.now(),
+        state: this.getState(),
+        originalError,
+      },
+    };
+
+    // Update player state with error
+    this._state.error = playerError;
+
+    // Emit 'error' event with error details for application-level handling
+    this._eventEmitter.emit('error', playerError);
+
+    // Emit 'statechange' event since state.error has changed
+    this._eventEmitter.emit('statechange', this.getState());
+
+    // Log to console in development mode
+    // Check for common development environment indicators
+    const isDevelopment = 
+      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') ||
+      typeof process === 'undefined' || // Browser environment without build process
+      (typeof process !== 'undefined' && (!process.env || !process.env.NODE_ENV)); // NODE_ENV not set (likely development)
+
+    if (isDevelopment) {
+      console.error('[MakeNoise Error]', {
+        code: playerError.code,
+        message: playerError.message,
+        context: playerError.details?.context,
+        timestamp: new Date(playerError.details?.timestamp || Date.now()).toISOString(),
+        originalError: playerError.details?.originalError,
+      });
+    }
+  }
+}

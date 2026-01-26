@@ -1,0 +1,120 @@
+.playlist-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background-color: var(--background);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.playlist-item:hover {
+  background-color: var(--surface);
+  border-color: var(--primary-color);
+  transform: translateX(4px);
+}
+
+.playlist-item.active {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.playlist-item.active * {
+  color: white !important;
+}
+
+.playlist-item-number {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  color: var(--text-secondary);
+  min-width: 30px;
+  text-align: center;
+}
+
+.playlist-item-artwork {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.playlist-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-item-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-item-artist {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-item-duration {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  min-width: 50px;
+  text-align: right;
+}
+
+.btn-remove {
+  padding: 0.25rem 0.5rem;
+  font-size: 1.25rem;
+  min-width: auto;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.btn-remove:hover {
+  opacity: 1;
+  background-color: #ff4444;
+  color: white;
+  transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+  .playlist-item {
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .playlist-item-artwork {
+    width: 40px;
+    height: 40px;
+  }
+
+  .playlist-item-number {
+    min-width: 25px;
+    font-size: 0.9rem;
+  }
+
+  .playlist-item-title {
+    font-size: 0.9rem;
+  }
+
+  .playlist-item-artist {
+    font-size: 0.8rem;
+  }
+
+  .playlist-item-duration {
+    font-size: 0.8rem;
+  }
+}

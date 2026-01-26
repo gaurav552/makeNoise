@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Keyboard Shortcuts</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .info {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
+    .info p {
+      margin: 5px 0;
+    }
+    .shortcuts {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
+    .shortcuts h3 {
+      margin-top: 0;
+    }
+    .shortcuts ul {
+      list-style: none;
+      padding: 0;
+    }
+    .shortcuts li {
+      padding: 8px;
+      margin: 5px 0;
+      background: white;
+      border-radius: 3px;
+    }
+    .shortcuts kbd {
+      background: #333;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    input[type="text"] {
+      padding: 10px;
+      font-size: 16px;
+      width: 300px;
+      margin: 10px 0;
+    }
+    #log {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Keyboard Shortcuts</h1>
+  
+  <div class="warning">
+    <strong>⚠️ Note:</strong> Make sure to click outside the text input field before testing keyboard shortcuts!
+  </div>
+
+  <div class="shortcuts">
+    <h3>Available Keyboard Shortcuts:</h3>
+    <ul>
+      <li><kbd>Space</kbd> - Toggle play/pause</li>
+      <li><kbd>M</kbd> - Toggle mute</li>
+      <li><kbd>→</kbd> (Right Arrow) - Seek forward 10 seconds</li>
+      <li><kbd>←</kbd> (Left Arrow) - Seek backward 10 seconds</li>
+      <li><kbd>↑</kbd> (Up Arrow) - Increase volume by 10%</li>
+      <li><kbd>↓</kbd> (Down Arrow) - Decrease volume by 10%</li>
+    </ul>
+  </div>
+
+  <div class="info">
+    <h3>Current State:</h3>
+    <p><strong>Is Playing:</strong> <span id="playing">false</span></p>
+    <p><strong>Current Time:</strong> <span id="currentTime">0.0</span>s</p>
+    <p><strong>Volume:</strong> <span id="volume">1.0</span> (<span id="volumePercent">100</span>%)</p>
+    <p><strong>Is Muted:</strong> <span id="muted">false</span></p>
+  </div>
+
+  <div class="controls">
+    <h3>Manual Controls (for comparison):</h3>
+    <button onclick="loadTrack()">Load Sample Track</button>
+    <button onclick="togglePlay()">Toggle Play/Pause</button>
+    <button onclick="toggleMute()">Toggle Mute</button>
+  </div>
+
+  <div class="controls">
+    <h3>Test Input Field (shortcuts should NOT work here):</h3>
+    <input type="text" placeholder="Type here - shortcuts should be disabled" id="testInput">
+  </div>
+
+  <div id="log">
+    <strong>Event Log:</strong>
+    <div id="logContent"></div>
+  </div>
+
+  <script type="module">
+    import { MakeNoise } from '../../src/core/MakeNoise.ts';
+
+    // Get player instance
+    const player = MakeNoise.getInstance();
+
+    // Track previous volume for mute/unmute
+    let previousVolume = 1.0;
+
+    // Subscribe to events
+    player.on('play', () => {
+      log('▶️ Play event');
+      updateDisplay();
+    });
+
+    player.on('pause', () => {
+      log('⏸️ Pause event');
+      updateDisplay();
+    });
+
+    player.on('volumechange', (volume) => {
+      log(`🔊 Volume changed: ${volume.toFixed(2)}`);
+      updateDisplay();
+    });
+
+    player.on('seeking', (time) => {
+      log(`⏩ Seeking to: ${time.toFixed(1)}s`);
+    });
+
+    player.on('seeked', (time) => {
+      log(`✓ Seeked to: ${time.toFixed(1)}s`);
+      updateDisplay();
+    });
+
+    player.on('statechange', () => {
+      updateDisplay();
+    });
+
+    // Listen for keyboard events to log them
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const isInputField = 
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable;
+
+      if (isInputField) {
+        log(`⌨️ Key pressed in input field: ${event.key} (shortcuts disabled)`);
+      } else {
+        const keyName = event.key === ' ' ? 'Space' : event.key;
+        log(`⌨️ Key pressed: ${keyName}`);
+      }
+    });
+
+    // Update display
+    function updateDisplay() {
+      const state = player.getState();
+      document.getElementById('playing').textContent = state.isPlaying;
+      document.getElementById('currentTime').textContent = state.currentTime.toFixed(1);
+      document.getElementById('volume').textContent = state.volume.toFixed(2);
+      document.getElementById('volumePercent').textContent = Math.round(state.volume * 100);
+      document.getElementById('muted').textContent = state.volume === 0 ? 'true' : 'false';
+    }
+
+    // Load sample track
+    window.loadTrack = function() {
+      log('Loading sample track...');
+      const track = {
+        id: 'sample-1',
+        src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        title: 'Sample Track',
+        artist: 'Test Artist'
+      };
+      player.play(track).then(() => {
+        log('✓ Track loaded and playing');
+      }).catch((error) => {
+        log(`✗ Error loading track: ${error.message}`);
+      });
+    };
+
+    // Toggle play/pause
+    window.togglePlay = function() {
+      player.togglePlayPause();
+      log('Toggled play/pause manually');
+    };
+
+    // Toggle mute
+    window.toggleMute = function() {
+      const state = player.getState();
+      if (state.volume > 0) {
+        previousVolume = state.volume;
+        player.setVolume(0);
+        log('Muted manually');
+      } else {
+        player.setVolume(previousVolume > 0 ? previousVolume : 1.0);
+        log('Unmuted manually');
+      }
+    };
+
+    // Log function
+    function log(message) {
+      const logContent = document.getElementById('logContent');
+      const entry = document.createElement('div');
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContent.appendChild(entry);
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    // Initial display update
+    updateDisplay();
+    log('✓ Player initialized with keyboard shortcuts enabled!');
+    log('📝 Try pressing Space, M, or Arrow keys to test shortcuts');
+    log('⚠️ Make sure to click outside the text input field first!');
+  </script>
+</body>
+</html>

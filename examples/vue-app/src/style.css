@@ -1,0 +1,8 @@
+/**
+ * Vue App - Global Styles
+ * Main styles are imported from shared-styles.css
+ */
+
+@import url('../../shared-styles.css');
+
+/* Vue-specific overrides or additions can go here if needed */

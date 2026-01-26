@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test setPlaybackRate</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .info {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
+    .info p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test setPlaybackRate() Method</h1>
+  
+  <div class="info">
+    <h3>Current State:</h3>
+    <p><strong>Playback Rate:</strong> <span id="rate">1.0</span></p>
+    <p><strong>Is Playing:</strong> <span id="playing">false</span></p>
+  </div>
+
+  <div class="controls">
+    <h3>Playback Rate Controls:</h3>
+    <button onclick="setRate(0.5)">0.5x (Half Speed)</button>
+    <button onclick="setRate(0.75)">0.75x</button>
+    <button onclick="setRate(1.0)">1.0x (Normal)</button>
+    <button onclick="setRate(1.25)">1.25x</button>
+    <button onclick="setRate(1.5)">1.5x</button>
+    <button onclick="setRate(2.0)">2.0x (Double Speed)</button>
+  </div>
+
+  <div class="controls">
+    <h3>Test Edge Cases:</h3>
+    <button onclick="testInvalidValues()">Test Invalid Values</button>
+    <button onclick="testEvents()">Test Events</button>
+  </div>
+
+  <div id="log" style="background: #fff; border: 1px solid #ccc; padding: 10px; margin-top: 20px; max-height: 200px; overflow-y: auto;">
+    <strong>Event Log:</strong>
+    <div id="logContent"></div>
+  </div>
+
+  <script type="module">
+    import { MakeNoise } from '../../src/core/MakeNoise.ts';
+
+    // Get player instance
+    const player = MakeNoise.getInstance();
+
+    // Subscribe to events
+    player.on('ratechange', (rate) => {
+      log(`ratechange event: ${rate}`);
+      updateDisplay();
+    });
+
+    player.on('statechange', () => {
+      log('statechange event');
+      updateDisplay();
+    });
+
+    // Update display
+    function updateDisplay() {
+      const state = player.getState();
+      document.getElementById('rate').textContent = state.playbackRate.toFixed(2);
+      document.getElementById('playing').textContent = state.isPlaying;
+    }
+
+    // Set rate function
+    window.setRate = function(rate) {
+      log(`Setting playback rate to ${rate}...`);
+      player.setPlaybackRate(rate);
+    };
+
+    // Test invalid values
+    window.testInvalidValues = function() {
+      log('Testing invalid values...');
+      
+      const currentRate = player.getState().playbackRate;
+      log(`Current rate: ${currentRate}`);
+      
+      // Test negative value
+      player.setPlaybackRate(-1.0);
+      log(`After setPlaybackRate(-1.0): ${player.getState().playbackRate} (should be unchanged)`);
+      
+      // Test zero
+      player.setPlaybackRate(0);
+      log(`After setPlaybackRate(0): ${player.getState().playbackRate} (should be unchanged)`);
+      
+      // Test NaN
+      player.setPlaybackRate(NaN);
+      log(`After setPlaybackRate(NaN): ${player.getState().playbackRate} (should be unchanged)`);
+      
+      // Test valid value
+      player.setPlaybackRate(1.5);
+      log(`After setPlaybackRate(1.5): ${player.getState().playbackRate} (should be 1.5)`);
+    };
+
+    // Test events
+    window.testEvents = function() {
+      log('Testing event emission...');
+      
+      let ratechangeEmitted = false;
+      let statechangeEmitted = false;
+      
+      const rateHandler = () => {
+        ratechangeEmitted = true;
+        log('✓ ratechange event emitted');
+      };
+      
+      const stateHandler = () => {
+        statechangeEmitted = true;
+        log('✓ statechange event emitted');
+      };
+      
+      player.on('ratechange', rateHandler);
+      player.on('statechange', stateHandler);
+      
+      player.setPlaybackRate(1.75);
+      
+      setTimeout(() => {
+        if (ratechangeEmitted && statechangeEmitted) {
+          log('✓ All events emitted successfully!');
+        } else {
+          log('✗ Some events were not emitted');
+        }
+        
+        player.off('ratechange', rateHandler);
+        player.off('statechange', stateHandler);
+      }, 100);
+    };
+
+    // Log function
+    function log(message) {
+      const logContent = document.getElementById('logContent');
+      const entry = document.createElement('div');
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContent.appendChild(entry);
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    // Initial display update
+    updateDisplay();
+    log('Player initialized. Ready to test setPlaybackRate()!');
+  </script>
+</body>
+</html>
