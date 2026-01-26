@@ -589,4 +589,4 @@ Found a bug or have a feature request? Please open an issue on [GitHub](https://
 
 ---
 
-Made with ❤️ by [Your Name]
+Made with ❤️ by Gaura Ghimire
