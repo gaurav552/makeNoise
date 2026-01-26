@@ -581,12 +581,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 Found a bug or have a feature request? Please open an issue on [GitHub](https://github.com/yourusername/makenoise/issues).
 
-## 📮 Support
-
-- 📧 Email: your.email@example.com
-- 💬 Discord: [Join our community](https://discord.gg/yourinvite)
-- 🐦 Twitter: [@yourusername](https://twitter.com/yourusername)
-
 ## 🙏 Acknowledgments
 
 - Inspired by the need for persistent audio in modern SPAs
