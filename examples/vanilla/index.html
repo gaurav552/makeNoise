@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MakeNoise test bench</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226.5%22 fill=%22none%22 stroke=%22%23e3726c%22 stroke-width=%221.5%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%223%22 fill=%22%23e3726c%22/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <div class="brand">MakeNoise <span>test bench</span></div>
+      <div class="tools">
+        <label>Corner
+          <select id="position">
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right">Bottom right</option>
+            <option value="top-right">Top right</option>
+            <option value="top-left">Top left</option>
+          </select>
+        </label>
+        <label>Theme
+          <select id="theme">
+            <option value="auto">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="artwork" /> Artwork</label>
+        <button class="link" id="save-session" title="The app decides where to keep it. Here: localStorage">Save session</button>
+        <button class="link" id="restore-session">Restore session</button>
+      </div>
+    </header>
+
+    <div class="page">
+      <!-- The APPLICATION's playlists. MakeNoise receives copies and never changes these. -->
+      <aside class="library" aria-labelledby="library-title">
+        <div class="library-head">
+          <h2 id="library-title">Playlists</h2>
+          <span class="check" id="integrity" title="Re-checked after every queue change">Unchanged by the player</span>
+        </div>
+        <div id="playlists"></div>
+
+        <details class="log">
+          <summary>Event log</summary>
+          <ol id="log"></ol>
+        </details>
+      </aside>
+
+      <main class="article">
+        <h1>A player that stays out of the way</h1>
+        <p class="lede">
+          Start a playlist from the left. The player appears as a small medallion in the corner and stays there while you
+          read the rest of this page.
+        </p>
+
+        <figure class="plate wide"><div class="art a1"></div><figcaption>Placeholder image, wide</figcaption></figure>
+
+        <h2>What to try</h2>
+        <p>
+          Move your pointer onto the medallion. After a moment it opens into a small card with the title, a seek bar and
+          the controls. Move away and it folds back into the corner. Tab to it with the keyboard and it opens the same
+          way. Escape closes it.
+        </p>
+        <p>
+          The list icon in the card opens the queue. The queue stays open until you close it, so you can keep adding
+          tracks from the playlists and watch them arrive. Drag the dotted handle to reorder, or focus a row and press
+          Alt with the up and down arrows. Delete removes a row. None of this touches the playlists on the left.
+        </p>
+
+        <div class="plates">
+          <figure class="plate"><div class="art a2"></div><figcaption>Placeholder image, portrait</figcaption></figure>
+          <figure class="plate"><div class="art a3"></div><figcaption>Placeholder image, portrait</figcaption></figure>
+        </div>
+
+        <h2>While you read</h2>
+        <p>
+          After a few seconds without attention the medallion fades back a little, so it doesn't pull your eye while
+          you read. When the track changes, its title shows next to the medallion for a moment and then disappears.
+          Long titles wrap onto two lines in the card instead of being cut short.
+        </p>
+        <p>
+          The ring around the artwork is the progress through the current track. Shuffle and repeat live in the card,
+          next to previous and next. Repeat cycles through off, all and one.
+        </p>
+
+        <figure class="plate wide"><div class="art a4"></div><figcaption>Placeholder image, wide</figcaption></figure>
+
+        <h2>When something goes wrong</h2>
+        <p>
+          The last playlist contains a file that doesn't exist. Play it and the player skips the missing track, then
+          says which one it skipped. If every track in the queue fails, it stops and explains why instead of trying
+          forever.
+        </p>
+        <p>
+          Some browsers block audio until you interact with the page. If that happens, the card asks you to press play.
+        </p>
+
+        <h2>Styling it</h2>
+        <p>
+          Change the corner and the theme in the header. In your own app you can also set colors, fonts, size and
+          offsets with CSS custom properties on the element, and style its inner parts with ::part().
+        </p>
+
+        <div class="plates three">
+          <figure class="plate"><div class="art a5"></div></figure>
+          <figure class="plate"><div class="art a6"></div></figure>
+          <figure class="plate"><div class="art a7"></div></figure>
+        </div>
+
+        <p class="end">That's the whole page. The player is still in the corner.</p>
+      </main>
+    </div>
+
+    <mn-player></mn-player>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

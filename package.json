@@ -1,0 +1,56 @@
+{
+  "name": "makenoise",
+  "version": "0.1.0",
+  "description": "Framework-agnostic audio player for single page applications, powered by Howler.js",
+  "type": "module",
+  "license": "MIT",
+  "author": "Gaura Ghimire",
+  "sideEffects": [
+    "./dist/elements.js",
+    "./src/elements/index.ts",
+    "./dist/makenoise.iife.js"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/makenoise.js",
+  "module": "./dist/makenoise.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/makenoise.js"
+    },
+    "./elements": {
+      "types": "./dist/types/elements/index.d.ts",
+      "import": "./dist/elements.js"
+    }
+  },
+  "scripts": {
+    "predev": "node scripts/generate-tones.mjs",
+    "dev": "vite --config examples/vanilla/vite.config.ts",
+    "build": "vite build && vite build --mode iife && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "tones": "node scripts/generate-tones.mjs"
+  },
+  "keywords": [
+    "audio",
+    "player",
+    "queue",
+    "playlist",
+    "howler",
+    "spa"
+  ],
+  "dependencies": {
+    "howler": "^2.2.4"
+  },
+  "devDependencies": {
+    "@types/howler": "^2.2.13",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
