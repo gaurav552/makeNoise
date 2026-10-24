@@ -347,6 +347,14 @@ npm run build   # dist/makenoise.js + dist/elements.js (ESM), dist/makenoise.iif
 
 The test bench (`examples/vanilla`) is a reading page with `<mn-player>` in the corner. It has three playlists (short local test tones, real streamed MP3s, and one with a broken file), corner and theme switchers, session save/restore, and an event log. The player is also on `window.player` for poking at in the console.
 
+### Releasing
+
+1. Add the new version's section to `CHANGELOG.md` (`## 0.1.2`) and merge everything into `master`.
+2. `npm version patch` (or `minor`): bumps `package.json`, commits and tags `v0.1.2`.
+3. `git push origin master --follow-tags`.
+
+The tag starts `.github/workflows/publish.yml`, which runs the tests, publishes to npm with provenance through npm trusted publishing (no token involved) and creates the GitHub release from the changelog section. The push to `master` redeploys the docs site.
+
 ## Roadmap
 
 - [x] Phase 0: project setup (TypeScript, Vite, Vitest)
@@ -357,6 +365,7 @@ The test bench (`examples/vanilla`) is a reading page with `<mn-player>` in the 
 - [x] Phase 5: keyboard shortcuts (scoped), next-track preloading, SSR safety, docs site (`docs/`)
 - [x] Phase 6: public site on GitHub Pages: docs, examples gallery and the four demo apps, deployed by `.github/workflows/pages.yml`
 - [x] Phase 7: published to npm as [`makenoise`](https://www.npmjs.com/package/makenoise) 0.1.0
+- [x] Phase 8: releases from GitHub Actions: pushing a version tag publishes to npm with provenance and creates the GitHub release
 
 ## License
 
