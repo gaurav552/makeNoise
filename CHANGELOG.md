@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- First release published from GitHub Actions through npm trusted publishing, with provenance linking it to its commit and workflow run. No code changes.
+- README: a "Releasing" section with the release steps.
+
 ## 0.1.1
 
 - **Types:** `PlayerError['type']` is now just `'load'`. The `'play'` member was never emitted: when the browser refuses to start playback, the player sets `state.blocked` and emits `blocked` instead. If you compared `error.type === 'play'`, remove that branch.
