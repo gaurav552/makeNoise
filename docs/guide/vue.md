@@ -172,7 +172,7 @@ const stop = usePlayerEvent('error', (error) => {
 
 ## Typed tracks
 
-With a custom track type, pass it as a type argument: `usePlayer<MyTrack>()`, `usePlayerState<MyTrack>()` or `usePlayerEvent<'trackend', MyTrack>('trackend', …)`.
+With a custom track type, pass it as a type argument: `usePlayer<MyTrack>()` or `usePlayerState<MyTrack>()`. For `usePlayerEvent`, annotate the handler's parameter and the track type is inferred: `usePlayerEvent('trackend', (item: QueueItem<MyTrack>) => …)`.
 
 ## Using `<mn-player>` {#using-mn-player}
 

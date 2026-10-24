@@ -102,14 +102,15 @@ When a track fails to load, the player sets `state.error`, emits an `error` even
 
 ```ts
 player.on('error', (error) => {
-  // error.type: 'load' (could not be fetched or decoded) or 'play' (the browser refused)
   showToast(`Skipped ${error.item?.track.title ?? 'a track'}: ${error.message}`);
 });
 ```
 
 With `createPlayer({ skipOnError: false })` the player stops on the failed track with `status: 'error'`.
 
-A successful load clears `state.error`.
+`state.error` describes the current entry, so the next successful load clears it. When the player skips a broken track, `state.error` is already gone by the time the next track plays: show "skipped" notices from the `error` event, as above, and use `state.error` for the case where playback stopped (`status: 'error'`).
+
+A browser that refuses to start playback is not an error. It sets `state.blocked` and emits `blocked`; see below.
 
 ## Autoplay blocking
 
