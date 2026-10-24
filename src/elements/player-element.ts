@@ -1,10 +1,10 @@
-import { getDefaultPlayer, onDefaultPlayer } from '../default-player';
-import { bindKeyboard } from '../keyboard';
-import type { Player } from '../player';
-import type { PlayerState, ProgressState, QueueItem, Track } from '../types';
-import { accents, isAccentName, type AccentName } from './accents';
-import { icons } from './icons';
-import { styles } from './styles';
+import { getDefaultPlayer, onDefaultPlayer } from '../default-player.js';
+import { bindKeyboard } from '../keyboard.js';
+import type { Player } from '../player.js';
+import type { PlayerState, ProgressState, QueueItem, Track } from '../types.js';
+import { accents, isAccentName, type AccentName } from './accents.js';
+import { icons } from './icons.js';
+import { styles } from './styles.js';
 
 // Lets the module be imported during server-side rendering, where HTMLElement doesn't exist.
 const Base = (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) as typeof HTMLElement;

@@ -4,7 +4,7 @@
   "description": "Framework-agnostic audio player for single page applications, powered by Howler.js",
   "type": "module",
   "license": "MIT",
-  "author": "Gaura Ghimire",
+  "author": "Gaurav Raj Ghimire",
   "homepage": "https://gaurav552.github.io/makeNoise/",
   "repository": {
     "type": "git",
@@ -24,6 +24,8 @@
   "main": "./dist/makenoise.js",
   "module": "./dist/makenoise.js",
   "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/makenoise.iife.js",
+  "jsdelivr": "./dist/makenoise.iife.js",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -44,7 +46,8 @@
     "./svelte": {
       "types": "./dist/types/svelte/index.d.ts",
       "import": "./dist/svelte.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "predev": "node scripts/generate-tones.mjs",
@@ -55,6 +58,7 @@
     "build": "vite build && vite build --mode iife && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
     "typecheck": "tsc --noEmit",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

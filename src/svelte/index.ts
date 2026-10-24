@@ -1,9 +1,9 @@
 import { getContext, hasContext, onDestroy, setContext } from 'svelte';
 import { createSubscriber } from 'svelte/reactivity';
-import { getDefaultPlayer } from '../default-player';
-import type { Player, PlayerEvents } from '../player';
-import type { ReadableStore } from '../store';
-import type { PlayerState, ProgressState, Track } from '../types';
+import { getDefaultPlayer } from '../default-player.js';
+import type { Player, PlayerEvents } from '../player.js';
+import type { ReadableStore } from '../store.js';
+import type { PlayerState, ProgressState, Track } from '../types.js';
 
 // The player itself is already a Svelte store (`$player` works), and so are
 // `player.state` and `player.progress`. These helpers add context and runes-style access.

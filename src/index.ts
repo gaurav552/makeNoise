@@ -1,15 +1,15 @@
-export { createPlayer } from './player';
-export { getDefaultPlayer, setDefaultPlayer, onDefaultPlayer } from './default-player';
-export { bindKeyboard, defaultKeys } from './keyboard';
-export type { KeyboardAction, KeyboardOptions } from './keyboard';
-export type { Player, PlayerOptions, PlayOptions, PlayerEvents, PlayerSession } from './player';
-export { HowlerEngine } from './engine/howler';
-export type { HowlerEngineOptions } from './engine/howler';
-export type { AudioEngine, EngineHandlers, EngineSource } from './engine/types';
-export { createStore } from './store';
-export type { ReadableStore } from './store';
-export * as queue from './queue';
-export type { QueueState } from './queue';
+export { createPlayer } from './player.js';
+export { getDefaultPlayer, setDefaultPlayer, onDefaultPlayer } from './default-player.js';
+export { bindKeyboard, defaultKeys } from './keyboard.js';
+export type { KeyboardAction, KeyboardOptions } from './keyboard.js';
+export type { Player, PlayerOptions, PlayOptions, PlayerEvents, PlayerSession } from './player.js';
+export { HowlerEngine } from './engine/howler.js';
+export type { HowlerEngineOptions } from './engine/howler.js';
+export type { AudioEngine, EngineHandlers, EngineSource } from './engine/types.js';
+export { createStore } from './store.js';
+export type { ReadableStore } from './store.js';
+export * as queue from './queue.js';
+export type { QueueState } from './queue.js';
 export type {
   Track,
   QueueItem,
@@ -18,4 +18,4 @@ export type {
   PlayerError,
   PlayerState,
   ProgressState,
-} from './types';
+} from './types.js';

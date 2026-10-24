@@ -1,5 +1,5 @@
 import { Howl } from 'howler';
-import type { AudioEngine, EngineHandlers, EngineSource } from './types';
+import type { AudioEngine, EngineHandlers, EngineSource } from './types.js';
 
 export interface HowlerEngineOptions {
   /**

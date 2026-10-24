@@ -1,8 +1,8 @@
 import { getCurrentScope, hasInjectionContext, inject, onScopeDispose, provide, shallowRef, type InjectionKey, type Ref } from 'vue';
-import { getDefaultPlayer } from '../default-player';
-import type { Player, PlayerEvents } from '../player';
-import type { ReadableStore } from '../store';
-import type { PlayerState, ProgressState, Track } from '../types';
+import { getDefaultPlayer } from '../default-player.js';
+import type { Player, PlayerEvents } from '../player.js';
+import type { ReadableStore } from '../store.js';
+import type { PlayerState, ProgressState, Track } from '../types.js';
 
 /** For `app.provide(playerKey, player)`, to give the whole app a player other than the default. */
 export const playerKey: InjectionKey<Player<any>> = Symbol('makenoise');

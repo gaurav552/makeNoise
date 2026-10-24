@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
+    // Published types are read by consumers on NodeNext too, which needs `.js` on relative imports.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "paths": {},
     "declaration": true,
     "emitDeclarationOnly": true,

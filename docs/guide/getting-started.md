@@ -8,11 +8,16 @@ MakeNoise plays audio in single page applications. It keeps a play queue, talks 
 npm install makenoise
 ```
 
-::: warning Not on npm yet
-MakeNoise hasn't been published to npm yet. Until it is, clone [the repository](https://github.com/gaurav552/makeNoise) and run `npm run build`, or try the [live examples](/examples/) first.
-:::
-
 Howler.js is a dependency and is installed with it. React, Vue and Svelte are optional peer dependencies: install the one you use (React 18+, Vue 3.3+ or Svelte 5.7+).
+
+Without a bundler, load the single-file build from a CDN. It includes Howler and `<mn-player>` and puts everything on `window.MakeNoise`:
+
+```html
+<script src="https://unpkg.com/makenoise@0.1"></script>
+<script>
+  const player = MakeNoise.createPlayer();
+</script>
+```
 
 The package has five entry points:
 

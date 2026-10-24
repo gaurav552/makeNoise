@@ -1,5 +1,5 @@
-import type { Player } from './player';
-import type { Track } from './types';
+import type { Player } from './player.js';
+import type { Track } from './types.js';
 
 /**
  * Connects the player to the OS media controls (lock screen, notification centre,
