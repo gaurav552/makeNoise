@@ -1,0 +1,55 @@
+# Publishes to npm when a version tag (v1.2.3) is pushed, using npm trusted publishing:
+# no token is stored anywhere, and npm attaches provenance linking each version to this run.
+# One-time setup on npmjs.com: package Settings → Trusted Publisher → GitHub Actions,
+# user `gaurav552`, repository `makeNoise`, workflow `publish.yml`, no environment.
+# Started by hand (Actions → Publish to npm → Run workflow), it does a dry run instead.
+name: Publish to npm
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # npm trusted publishing
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11
+      - run: npm ci
+
+      - name: Check the tag matches package.json
+        if: github.ref_type == 'tag'
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      # prepublishOnly runs typecheck, tests and a fresh build first.
+      - name: Publish
+        run: npm publish --access public ${{ github.ref_type != 'tag' && '--dry-run' || '' }}
+
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The release notes are this version's section of CHANGELOG.md.
+          notes="$(awk -v heading="## ${GITHUB_REF_NAME#v}" '$0 == heading { found = 1; next } /^## / { found = 0 } found' CHANGELOG.md)"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "${notes:-See CHANGELOG.md.}"
