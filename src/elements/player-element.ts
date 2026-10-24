@@ -1,4 +1,5 @@
 import { getDefaultPlayer, onDefaultPlayer } from '../default-player';
+import { bindKeyboard } from '../keyboard';
 import type { Player } from '../player';
 import type { PlayerState, ProgressState, QueueItem, Track } from '../types';
 import { accents, isAccentName, type AccentName } from './accents';
@@ -107,13 +108,14 @@ interface Drag {
  *  - `accent`: `red` (default) | `orange` | `green` | `teal` | `blue` | `purple`
  *  - `no-color-picker`: hide the color picker (it also stops restoring the listener's saved color)
  *  - `artwork`: show the track's artwork in the medallion
+ *  - `keyboard`: keyboard shortcuts while focus is in the player; `keyboard="global"` for the whole page
  *
  * Events: `accentchange` (detail: `{ accent }`) when the listener picks a color.
  *
  * It uses the first player created with `createPlayer()`, or the one assigned to `.player`.
  */
 export class MakeNoisePlayerElement extends Base {
-  static observedAttributes = ['position', 'always-visible', 'accent', 'artwork'];
+  static observedAttributes = ['position', 'always-visible', 'accent', 'artwork', 'keyboard'];
 
   private root!: ShadowRoot;
   private hud!: HTMLElement;
@@ -123,6 +125,7 @@ export class MakeNoisePlayerElement extends Base {
   private assignedPlayer: Player<Track> | null = null;
   private unsubscribers: (() => void)[] = [];
   private offDefault: (() => void) | null = null;
+  private offKeyboard: (() => void) | null = null;
   private state: PlayerState<Track> | null = null;
 
   // Why the card is open. It stays expanded while any of these hold.
@@ -205,6 +208,16 @@ export class MakeNoisePlayerElement extends Base {
     if (name === 'position') this.applyPosition();
     if ((name === 'always-visible' || name === 'artwork') && this.state) this.render(this.state);
     if (name === 'accent') this.applyAccent();
+    if (name === 'keyboard' && this.isConnected) this.applyKeyboard();
+  }
+
+  /** `keyboard` (or `keyboard="focus"`): shortcuts while focus is in the player. `keyboard="global"`: anywhere on the page. */
+  private applyKeyboard() {
+    this.offKeyboard?.();
+    this.offKeyboard = null;
+    const mode = this.getAttribute('keyboard');
+    if (mode === null || mode === 'false' || !this.currentPlayer) return;
+    this.offKeyboard = bindKeyboard(this.currentPlayer, mode === 'global' ? document : this);
   }
 
   // ---------------------------------------------------------------------------
@@ -219,6 +232,7 @@ export class MakeNoisePlayerElement extends Base {
     if (player === this.currentPlayer) return;
     this.disconnectPlayer();
     this.currentPlayer = player;
+    this.applyKeyboard();
     if (!player) {
       this.hud.classList.add('empty');
       return;
@@ -236,6 +250,8 @@ export class MakeNoisePlayerElement extends Base {
   }
 
   private disconnectPlayer() {
+    this.offKeyboard?.();
+    this.offKeyboard = null;
     this.unsubscribers.forEach((off) => off());
     this.unsubscribers = [];
     this.currentPlayer = null;
@@ -698,6 +714,7 @@ export class MakeNoisePlayerElement extends Base {
   };
 
   private onDocumentKeyDown = (e: KeyboardEvent) => {
+    if (typeof e.key !== 'string') return;
     if (e.key === 'Tab' || e.key.startsWith('Arrow') || e.key === 'Enter' || e.key === ' ') this.keyboardMode = true;
   };
 
@@ -860,7 +877,9 @@ const FONT_URL = 'https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght
  */
 function loadFont() {
   if (document.querySelector('link[data-makenoise-font], link[href*="Nunito+Sans"]')) return;
-  for (const face of document.fonts) {
+  // Not iterable in some non-browser DOMs (jsdom), where there is nothing to check anyway.
+  const faces: Iterable<FontFace> = document.fonts && Symbol.iterator in document.fonts ? document.fonts : [];
+  for (const face of faces) {
     if (face.family.replace(/["']/g, '') === FONT_FAMILY) return;
   }
   const link = document.createElement('link');

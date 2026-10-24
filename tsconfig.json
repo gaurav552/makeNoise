@@ -9,7 +9,15 @@
     "noImplicitOverride": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
     "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    // The examples import `makenoise/*` like an app would; check them against the source, not a stale dist/.
+    "paths": {
+      "makenoise": ["./src/index.ts"],
+      "makenoise/*": ["./src/*/index.ts"]
+    },
     "types": ["vite/client", "node"]
   },
   "include": ["src", "tests", "examples", "vite.config.ts"]

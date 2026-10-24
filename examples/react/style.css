@@ -1,0 +1,53 @@
+/* Additions on top of ../vanilla/style.css (tokens, .bar, .page, .playlist, .track, .pill, .mini, .log). */
+
+.stage { display: grid; gap: 20px; align-content: start; max-width: 680px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.section-title { font-size: 13px; font-weight: 650; margin: 0 0 12px; color: var(--muted); }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ------------------------------------------------------------ now playing */
+
+.now-head { display: flex; gap: 16px; align-items: center; }
+.cover { flex: none; width: 96px; height: 96px; border-radius: 10px; background: var(--bg); object-fit: cover; }
+.now-text { min-width: 0; }
+.now-text p { margin: 0; }
+.now-title { font-size: 18px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.now-artist { color: var(--muted); font-size: 14px; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px !important; font-size: 12.5px; }
+.badge { border-radius: 999px; padding: 1px 10px; background: var(--bg); border: 1px solid var(--line); font-weight: 600; }
+.badge.playing { color: #3f8f5c; }
+.badge.error { color: #c2413b; }
+.warn { color: #c2413b; }
+
+.seek { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; }
+.seek input { flex: 1; }
+.time { font: 12px ui-monospace, 'Cascadia Code', Consolas, monospace; color: var(--muted); min-width: 4ch; }
+input[type='range'] { accent-color: var(--accent); min-height: 24px; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.group { display: flex; align-items: center; gap: 6px; }
+.icon {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--surface); font-size: 15px; line-height: 1;
+}
+.icon:hover:not(:disabled) { border-color: var(--muted); }
+.icon.main { width: 44px; height: 44px; background: var(--text); color: var(--bg); border-color: var(--text); }
+.icon:disabled { opacity: 0.4; cursor: default; }
+.pill[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: var(--accent); color: var(--accent); }
+.icon[aria-pressed='true'] { border-color: var(--accent); }
+
+/* ------------------------------------------------------------------ queue */
+
+.stage .track:hover { background: var(--bg); }
+.stage .track.current { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.stage .track.current .t { font-weight: 650; }
+.stage .track.played .t { color: var(--muted); }
+.stage .mini { min-width: 28px; min-height: 28px; }
+
+/* -------------------------------------------------------------------- log */
+
+.stage .log { margin: 0; }
+.stage .log ol { margin: 0; max-height: none; }

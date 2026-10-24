@@ -1,0 +1,18 @@
+/* Brand color: the project accent #e3726c, darkened where it is used for text on light backgrounds. */
+:root {
+  --vp-c-brand-1: #b5504a;
+  --vp-c-brand-2: #c85f59;
+  --vp-c-brand-3: #e3726c;
+  --vp-c-brand-soft: rgb(227 114 108 / 0.14);
+
+  --vp-button-brand-bg: #c4564f;
+  --vp-button-brand-hover-bg: #b5504a;
+  --vp-button-brand-active-bg: #a5463f;
+}
+
+.dark {
+  --vp-c-brand-1: #ee918c;
+  --vp-c-brand-2: #e3726c;
+  --vp-c-brand-3: #c4564f;
+  --vp-c-brand-soft: rgb(227 114 108 / 0.18);
+}

@@ -20,8 +20,13 @@ export interface AudioEngine {
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   setRate(rate: number): void;
-  /** Stop and release the current track. */
+  /** Stop and release the current track. Must not release a preloaded track. */
   unload(): void;
+  /**
+   * Optional. Start fetching the track that will most likely play next, so `load()`
+   * can reuse it. `null` releases whatever was preloaded.
+   */
+  preload?(source: EngineSource | null): void;
 }
 
 export interface EngineSource {

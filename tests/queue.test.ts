@@ -294,6 +294,29 @@ describe('advance', () => {
   });
 });
 
+describe('peekNext', () => {
+  const peek = (q: QueueState) => Q.peekNext(q)?.track.id ?? null;
+
+  it('is the following entry', () => {
+    expect(peek(Q.load(Q.emptyQueue(), tracks(3)))).toBe('t2');
+  });
+
+  it('is null at the end with repeat off, and the first entry with repeat all', () => {
+    const q = Q.load(Q.emptyQueue(), tracks(3), { startIndex: 2 });
+    expect(peek(q)).toBe(null);
+    expect(peek(Q.setRepeat(q, 'all'))).toBe('t1');
+  });
+
+  it('is null when it cannot be known or nothing new would load', () => {
+    const q = Q.load(Q.emptyQueue(), tracks(3), { startIndex: 2 });
+    expect(peek(Q.setRepeat(q, 'one'))).toBe(null);
+    // A shuffled queue is reshuffled when it wraps.
+    expect(peek(Q.setRepeat(Q.setShuffle(q, true, seeded()), 'all'))).toBe(null);
+    expect(peek(Q.setRepeat(Q.load(Q.emptyQueue(), tracks(1)), 'all'))).toBe(null);
+    expect(peek(Q.emptyQueue())).toBe(null);
+  });
+});
+
 describe('retreat', () => {
   it('moves to the previous entry', () => {
     const { queue, result } = Q.retreat(Q.load(Q.emptyQueue(), tracks(3), { startIndex: 2 }));

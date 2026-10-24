@@ -6,14 +6,16 @@ A framework-agnostic audio player for single page applications, powered by [Howl
 - **A real queue.** Play one track or a whole list, then add, remove, reorder, shuffle and repeat, with the queue always showing the actual play order.
 - **Works everywhere.** The core is plain TypeScript exposing a tiny store that React, Vue, Svelte, Solid and Angular can all consume natively.
 
-> Status: **core + default UI.** Queue, player, Howler engine, OS media controls, and `<mn-player>`, a small corner player. Framework bindings are next. See [Roadmap](#roadmap).
+> Status: **core, default UI and framework bindings.** Queue, player, Howler engine, OS media controls, `<mn-player>` (a small corner player), React / Vue / Svelte bindings, keyboard shortcuts and next-track preloading. See [Roadmap](#roadmap).
 
 ## Try it
 
 ```bash
 npm install
 npm run dev     # opens the test bench at http://localhost:5173
-npm test        # 80 unit tests
+npm run dev:react   # the same app in React (also dev:vue, dev:svelte)
+npm run docs:dev    # the documentation site
+npm test        # unit tests (core, bindings, keyboard)
 npm run build   # dist/makenoise.js + dist/elements.js (ESM), dist/makenoise.iife.js (<script> tag, everything bundled)
 ```
 
@@ -71,6 +73,7 @@ A small player that lives in a corner and stays out of the way:
 | `accent` | `red` (default), `orange`, `green`, `teal`, `blue`, `purple`: pastel colors |
 | `no-color-picker` | hide the color picker |
 | `artwork` | show the track's artwork in the medallion instead of the plain disc |
+| `keyboard` | keyboard shortcuts while focus is in the player; `keyboard="global"` for the whole page (see [Keyboard shortcuts](#keyboard-shortcuts)) |
 
 The element uses the first player created with `createPlayer()`. To control a different one, set `element.player = otherPlayer`. Methods: `expand()`, `collapse()`, `toggleQueue(open?)`.
 
@@ -108,7 +111,7 @@ mn-player {
 }
 ```
 
-Inner parts can be styled with `::part()`: `card`, `queue`, `medallion`, `title`, `artist`, `seek`, `controls`, `whisper`.
+Inner parts can be styled with `::part()`: `hud`, `card`, `queue`, `medallion`, `title`, `artist`, `seek`, `controls`, `whisper`.
 
 ```css
 mn-player::part(title) { font-style: italic; }
@@ -140,7 +143,7 @@ When a track enters the queue it's wrapped in a `QueueItem` `{ qid, track }`. Th
 | Repeat `all` | Wraps to the first track. When shuffled, it reshuffles each pass, and the last track never plays twice in a row. |
 | Repeat `one` | The track restarts when it ends, but **next** still moves on. |
 | Previous | More than 3 s in: restart. Otherwise: previous track. |
-| Remove the playing track | The next one starts playing. |
+| Remove the playing track | The next one takes its place, and keeps playing if the removed one was. Removing the last one leaves the player idle. |
 | Track fails to load | An `error` event fires and the player skips ahead. It gives up when every track fails, instead of looping. |
 
 ## API
@@ -154,7 +157,9 @@ When a track enters the queue it's wrapped in a `QueueItem` `{ qid, track }`. Th
 | `skipOnError` | `true` | Skip tracks that fail to load |
 | `restartThreshold` | `3` | Seconds before `previous()` restarts instead |
 | `progressInterval` | `250` | ms between `progress` updates while playing |
+| `preloadNext` | `20` | Start fetching the next track this many seconds before the current one ends, so it starts without a gap. `false` turns it off. |
 | `mediaSession` | `true` | OS media controls, lock screen and media keys |
+| `random` | `Math.random` | Random source for shuffling (seed it for reproducible tests) |
 | `engine` | `new HowlerEngine()` | Swap the audio backend. `new HowlerEngine({ html5: false })` uses Web Audio. |
 
 ### Playback
@@ -201,25 +206,97 @@ localStorage.setItem('player', JSON.stringify(player.serialize()));
 player.restore(JSON.parse(localStorage.getItem('player')!)); // loads paused at the saved position
 ```
 
-## Using it in a framework
-
-Dedicated bindings are coming, but the store contract already works directly:
-
-```tsx
-// React
-const state = useSyncExternalStore(player.state.listen, player.state.get);
-```
-
-```svelte
-<!-- Svelte: the player IS a store -->
-<p>{$player.current?.track.title}</p>
-```
+## Keyboard shortcuts
 
 ```ts
-// Vue
-const state = shallowRef(player.getState());
-onScopeDispose(player.state.listen((s) => (state.value = s)));
+import { bindKeyboard } from 'makenoise';
+
+const unbind = bindKeyboard(player, document.querySelector('#player-area')!); // only while focus is inside
+bindKeyboard(player, document);                                              // or page-wide
 ```
+
+Or on the element: `<mn-player keyboard>` (while focus is in the player) or `<mn-player keyboard="global">`.
+
+| Keys | Action |
+|---|---|
+| <kbd>Space</kbd>, <kbd>K</kbd> | play / pause |
+| <kbd>←</kbd> / <kbd>→</kbd>, <kbd>J</kbd> / <kbd>L</kbd> | seek 5 s back / forward |
+| <kbd>Shift</kbd>+<kbd>P</kbd> / <kbd>Shift</kbd>+<kbd>N</kbd> | previous / next |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | volume up / down |
+| <kbd>M</kbd> · <kbd>S</kbd> · <kbd>R</kbd> | mute · shuffle · repeat |
+
+Keys typed into text fields, sliders and other form controls are left alone, as are <kbd>Space</kbd> and <kbd>Enter</kbd> on buttons and links, and events the app already handled (`preventDefault()`). Nothing happens while the queue is empty. Change the keys with `bindKeyboard(player, scope, { keys: { toggle: ['p'], mute: false }, seekStep: 10, volumeStep: 0.05 })`.
+
+## Using it in a framework
+
+Create the player once, in a module of its own, outside any component, so it survives route changes. Every binding finds it automatically. To use a different player for part of the app, provide it as shown below.
+
+### React: `makenoise/react`
+
+```tsx
+import { usePlayer, usePlayerState, useProgress, usePlayerEvent, PlayerProvider } from 'makenoise/react';
+
+function NowPlaying() {
+  const player = usePlayer();
+  const title = usePlayerState((s) => s.current?.track.title); // re-renders only when the title changes
+  const playing = usePlayerState((s) => s.playing);
+  const seconds = useProgress((p) => Math.floor(p.currentTime));
+  usePlayerEvent('trackend', (item) => scrobble(item.track));
+
+  return <button onClick={player.toggle}>{playing ? 'Pause' : 'Play'} {title} ({seconds}s)</button>;
+}
+
+// Optional: <PlayerProvider player={otherPlayer}>…</PlayerProvider>
+```
+
+Selectors should return a value from the state (or a primitive), not a new object. Call `useProgress` only in the components that show time, because it updates several times a second.
+
+### Vue: `makenoise/vue`
+
+```vue
+<script setup lang="ts">
+import { usePlayer, usePlayerState, useProgress, usePlayerEvent } from 'makenoise/vue';
+
+const player = usePlayer();
+const state = usePlayerState();                        // Readonly<Ref<PlayerState>>
+const title = usePlayerState((s) => s.current?.track.title);
+const progress = useProgress();
+usePlayerEvent('trackend', (item) => scrobble(item.track)); // unsubscribed with the component
+</script>
+
+<template>
+  <button @click="player.toggle()">{{ state.playing ? 'Pause' : 'Play' }} {{ title }}</button>
+  <progress :value="progress.currentTime" :max="progress.duration" />
+</template>
+```
+
+Optional: `app.provide(playerKey, otherPlayer)` or `providePlayer(otherPlayer)` in a component's setup. To use `<mn-player>` in Vue templates, tell the compiler it's a custom element: `vue({ template: { compilerOptions: { isCustomElement: (tag) => tag.startsWith('mn-') } } })`.
+
+### Svelte 5: `makenoise/svelte`
+
+```svelte
+<script lang="ts">
+  import { getPlayer, usePlayerState, useProgress, onPlayerEvent } from 'makenoise/svelte';
+
+  const player = getPlayer();
+  const playback = usePlayerState();  // reactive: playback.current.status
+  const progress = useProgress();
+  onPlayerEvent('trackend', (item) => scrobble(item.track));
+</script>
+
+<button onclick={player.toggle}>{playback.current.playing ? 'Pause' : 'Play'}</button>
+<progress value={progress.current.currentTime} max={progress.current.duration}></progress>
+```
+
+The player is also a plain Svelte store, so `$player.current` works too. Don't name the variable `state`, because it clashes with the `$state` rune. Optional: `setPlayer(otherPlayer)` in a parent component.
+
+### Others (Solid, Angular, Preact, …)
+
+The stores follow a tiny contract that any framework can consume: `get()`, `listen(fn)` (changes only) and `subscribe(fn)` (also calls `fn` immediately).
+
+## Server-side rendering
+
+Every entry point can be imported on the server. `<mn-player>` is only registered in the browser. A player created on the server keeps its state but plays nothing: the Howler engine ignores calls when there is no `window`. Create the player in a client-only module (e.g. a `'use client'` file in Next.js), and don't share one between server requests.
 
 ## Architecture
 
@@ -230,6 +307,8 @@ src/
   engine/howler.ts  the only file that touches Howler
   store.ts          tiny store + typed event emitter
   media-session.ts  OS media controls
+  keyboard.ts       bindKeyboard(): scoped keyboard shortcuts
+  react/ vue/ svelte/  framework bindings: thin adapters over the stores
   default-player.ts lets UI elements find the player without wiring
   elements/         <mn-player>: player-element.ts, styles.ts, icons.ts
 ```
@@ -239,6 +318,7 @@ How the engine handles Howler's sharp edges:
 - **Unloads every replaced track**, which prevents the *HTML5 Audio pool exhausted* error.
 - **Ignores events from replaced tracks**, so a slow load after rapid skipping can't hijack playback.
 - **Streams through HTML5 audio by default**, so long tracks start immediately instead of downloading first.
+- **Preloads the next track** shortly before the current one ends, and hands that same `Howl` over when it starts.
 
 ## Roadmap
 
@@ -246,8 +326,8 @@ How the engine handles Howler's sharp edges:
 - [x] Phase 1: queue model + tests
 - [x] Phase 2: Howler engine, player store, events, Media Session, error skipping
 - [x] Phase 4: `<mn-player>`, the corner player with queue panel, themes, `::part()` and CSS custom properties
-- [ ] Phase 3: `makenoise/react`, `makenoise/vue`, `makenoise/svelte` bindings + one demo app per framework
-- [ ] Phase 5: keyboard shortcuts (scoped), next-track preloading, SSR safety, docs site
+- [x] Phase 3: `makenoise/react`, `makenoise/vue`, `makenoise/svelte` bindings + one demo app per framework (`examples/`)
+- [x] Phase 5: keyboard shortcuts (scoped), next-track preloading, SSR safety, docs site (`docs/`)
 
 ## License
 

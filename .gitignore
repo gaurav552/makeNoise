@@ -26,8 +26,9 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
-# Vite cache
+# Vite / VitePress caches
 .vite/
+docs/.vitepress/cache/
 
 # Editor / IDE
 .vscode/

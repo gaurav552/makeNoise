@@ -1,5 +1,7 @@
 export { createPlayer } from './player';
 export { getDefaultPlayer, setDefaultPlayer, onDefaultPlayer } from './default-player';
+export { bindKeyboard, defaultKeys } from './keyboard';
+export type { KeyboardAction, KeyboardOptions } from './keyboard';
 export type { Player, PlayerOptions, PlayOptions, PlayerEvents, PlayerSession } from './player';
 export { HowlerEngine } from './engine/howler';
 export type { HowlerEngineOptions } from './engine/howler';

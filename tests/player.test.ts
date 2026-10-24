@@ -404,3 +404,107 @@ describe('default player', () => {
     second.destroy();
   });
 });
+
+describe('preloading the next track', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function playNearEnd(options: { preloadNext?: number | false } = {}) {
+    vi.useFakeTimers();
+    engine = new FakeEngine(true, 180);
+    player = createPlayer({ engine, mediaSession: false, progressInterval: 250, ...options });
+    player.play(tracks(3));
+    return {
+      at(seconds: number) {
+        engine.pos = seconds;
+        vi.advanceTimersByTime(250);
+      },
+    };
+  }
+
+  it('preloads the next track shortly before the current one ends', () => {
+    const { at } = playNearEnd();
+    at(100);
+    expect(engine.preloads).toEqual([]);
+    at(165);
+    at(166);
+    expect(engine.preloads).toEqual(['/t2.mp3']);
+  });
+
+  it('follows queue edits made after preloading', () => {
+    const { at } = playNearEnd();
+    at(165);
+    player.remove(player.getState().queue[1]!.qid);
+    at(166);
+    expect(engine.preloads).toEqual(['/t2.mp3', null, '/t3.mp3']);
+    player.clearUpcoming();
+    expect(engine.preloads.at(-1)).toBe(null);
+  });
+
+  it('releases a stale preload right away, even while paused', () => {
+    const { at } = playNearEnd();
+    at(170);
+    player.pause();
+    player.play(tracks(2, 'new'), { autoplay: false });
+    expect(engine.preloads).toEqual(['/t2.mp3', null]);
+  });
+
+  it('preloads the same track again after skipping away and back', () => {
+    const { at } = playNearEnd();
+    at(170);
+    player.next(); // uses up the t2 preload
+    player.previous();
+    player.previous();
+    at(170);
+    expect(engine.preloads.filter((src) => src === '/t2.mp3')).toHaveLength(2);
+  });
+
+  it('counts a preload as used when another entry with the same source loads', () => {
+    vi.useFakeTimers();
+    engine = new FakeEngine(true, 180);
+    player = createPlayer({ engine, mediaSession: false });
+    const [a, b] = tracks(2);
+    player.play([a!, b!, { ...b!, id: 'b-again' }]);
+    engine.pos = 170;
+    vi.advanceTimersByTime(250);
+    player.next(); // loads b, which was preloaded
+    engine.pos = 170;
+    vi.advanceTimersByTime(250);
+    // The second b entry has the same source; it must be preloaded again, not skipped.
+    expect(engine.preloads).toEqual(['/t2.mp3', '/t2.mp3']);
+  });
+
+  it('respects the preloadNext option', () => {
+    const early = playNearEnd({ preloadNext: 90 });
+    early.at(95);
+    expect(engine.preloads).toEqual(['/t2.mp3']);
+    player.destroy();
+
+    const off = playNearEnd({ preloadNext: false });
+    off.at(179);
+    expect(engine.preloads).toEqual([]);
+  });
+
+  it('does not preload while paused or on repeat-one', () => {
+    const { at } = playNearEnd();
+    player.setRepeat('one');
+    at(170);
+    player.setRepeat('off');
+    engine.pos = 171;
+    player.pause(); // pausing reads the position one last time
+    at(172);
+    expect(engine.preloads).toEqual([]);
+  });
+
+  it('treats 0 as off', () => {
+    const { at } = playNearEnd({ preloadNext: 0 });
+    at(180);
+    expect(engine.preloads).toEqual([]);
+  });
+
+  it('releases the preload when destroyed', () => {
+    const { at } = playNearEnd();
+    at(170);
+    player.destroy();
+    expect(engine.preloads.at(-1)).toBe(null);
+  });
+});

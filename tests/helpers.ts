@@ -19,6 +19,8 @@ export class FakeEngine implements AudioEngine {
   muted = false;
   rate = 1;
   playCalls = 0;
+  /** Every `preload()` call: the src, or null for a release. */
+  preloads: (string | null)[] = [];
 
   constructor(public autoLoad = true, public trackDuration = 180) {}
 
@@ -100,6 +102,10 @@ export class FakeEngine implements AudioEngine {
     this.pendingPlay = false;
     this.pos = 0;
     this.dur = 0;
+  }
+
+  preload(source: EngineSource | null): void {
+    this.preloads.push(source ? String(source.src) : null);
   }
 
   /** Simulate the track reaching its end. */

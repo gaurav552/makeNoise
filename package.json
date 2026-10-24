@@ -24,15 +24,33 @@
     "./elements": {
       "types": "./dist/types/elements/index.d.ts",
       "import": "./dist/elements.js"
+    },
+    "./react": {
+      "types": "./dist/types/react/index.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./vue": {
+      "types": "./dist/types/vue/index.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./svelte": {
+      "types": "./dist/types/svelte/index.d.ts",
+      "import": "./dist/svelte.js"
     }
   },
   "scripts": {
     "predev": "node scripts/generate-tones.mjs",
     "dev": "vite --config examples/vanilla/vite.config.ts",
+    "dev:react": "npm run tones && vite --config examples/react/vite.config.ts",
+    "dev:vue": "npm run tones && vite --config examples/vue/vite.config.ts",
+    "dev:svelte": "npm run tones && vite --config examples/svelte/vite.config.ts",
     "build": "vite build && vite build --mode iife && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "tones": "node scripts/generate-tones.mjs"
   },
   "keywords": [
@@ -41,16 +59,48 @@
     "queue",
     "playlist",
     "howler",
-    "spa"
+    "spa",
+    "react",
+    "vue",
+    "svelte"
   ],
   "dependencies": {
     "howler": "^2.2.4"
   },
+  "peerDependencies": {
+    "react": ">=18",
+    "svelte": ">=5.7",
+    "vue": ">=3.3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/howler": "^2.2.13",
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "jsdom": "^29.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "svelte": "^5.57.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vitepress": "2.0.0-alpha.20",
+    "vitest": "^5.0.5",
+    "vue": "^3.5.44"
   }
 }

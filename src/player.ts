@@ -21,6 +21,11 @@ export interface PlayerOptions {
   restartThreshold?: number;
   /** How often `progress` updates while playing, in ms (default 250). */
   progressInterval?: number;
+  /**
+   * Start fetching the next track this many seconds before the current one ends,
+   * so it starts without a gap (default 20). `false` or `0` turns preloading off.
+   */
+  preloadNext?: number | false;
   /** Connect to OS media controls (default `true`). */
   mediaSession?: boolean;
   /** Random source for shuffling (default `Math.random`). */
@@ -127,6 +132,7 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
   const skipOnError = options.skipOnError ?? true;
   const restartThreshold = options.restartThreshold ?? 3;
   const progressInterval = options.progressInterval ?? 250;
+  const preloadAhead = options.preloadNext === undefined ? 20 : options.preloadNext || false;
 
   // All mutable state lives in these variables; `sync()` publishes them as one snapshot.
   let q: QueueState<T> = { ...Q.emptyQueue<T>(), shuffle: options.shuffle ?? false, repeat: options.repeat ?? 'off' };
@@ -142,6 +148,11 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
   let error: PlayerError | null = null;
   let consecutiveErrors = 0;
   let ticker: ReturnType<typeof setInterval> | undefined;
+  /**
+   * The source handed to `engine.preload()`, if any. Tracked by source rather than
+   * queue entry, because that is what the engine matches when it loads.
+   */
+  let preloadedKey: string | null = null;
 
   engine.setVolume(volume);
   engine.setMuted(muted);
@@ -186,6 +197,29 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
 
   function tick() {
     progress.update({ currentTime: engine.position(), duration: engine.duration() || progress.get().duration });
+    preloadIfNearEnd();
+  }
+
+  // --- preloading -----------------------------------------------------------
+
+  function preloadIfNearEnd() {
+    if (preloadAhead === false || !engine.preload || status !== 'playing') return;
+    const { currentTime, duration } = progress.get();
+    if (duration <= 0 || duration - currentTime > preloadAhead) return;
+    const next = Q.peekNext(q);
+    const key = next ? sourceKey(next.track) : null;
+    if (key === preloadedKey) return;
+    preloadedKey = key;
+    engine.preload(next ? { src: next.track.src, format: next.track.format } : null);
+  }
+
+  /** After a queue change: let go of a preload that is no longer what plays next. */
+  function dropStalePreload() {
+    if (preloadedKey === null) return;
+    const next = Q.peekNext(q);
+    if (next && sourceKey(next.track) === preloadedKey) return;
+    preloadedKey = null;
+    engine.preload?.(null);
   }
 
   function startTicker() {
@@ -219,6 +253,7 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
       if (intent) engine.play();
       else engine.pause();
     }
+    dropStalePreload();
     sync();
 
     if (previousItem !== item) events.emit('trackchange', item, previousItem);
@@ -229,6 +264,8 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
     stopTicker();
     const item = Q.currentItem(q);
     loadedQid = item?.qid ?? null;
+    // The engine uses up a preloaded track when it loads the same source.
+    if (item && sourceKey(item.track) === preloadedKey) preloadedKey = null;
     blocked = false;
 
     if (!item) {
@@ -515,6 +552,8 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
       intent = false;
       loadedQid = null;
       engine.unload();
+      preloadedKey = null;
+      engine.preload?.(null);
       events.clear();
     },
   };
@@ -522,6 +561,10 @@ export function createPlayer<T extends Track = Track>(options: PlayerOptions = {
   const disconnectMediaSession = options.mediaSession === false ? () => {} : connectMediaSession(player);
   if (!getDefaultPlayer()) setDefaultPlayer(player);
   return player;
+}
+
+function sourceKey(track: Track): string {
+  return JSON.stringify([track.src, track.format ?? null]);
 }
 
 function toArray<T>(value: T | readonly T[]): readonly T[] {

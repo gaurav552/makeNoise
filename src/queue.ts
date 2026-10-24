@@ -241,6 +241,20 @@ export function jumpTo<T extends Track>(q: QueueState<T>, qid: string): QueueSta
 }
 
 /**
+ * The entry that will play after the current one ends by itself, if that can be
+ * known in advance: `null` at the end of the queue, on repeat-one (the current entry
+ * plays again), and when a shuffled queue wraps around (it is reshuffled first).
+ */
+export function peekNext<T extends Track>(q: QueueState<T>): QueueItem<T> | null {
+  const index = currentIndex(q);
+  if (index === -1 || q.repeat === 'one') return null;
+  const following = q.items[index + 1];
+  if (following) return following;
+  if (q.repeat === 'all' && !q.shuffle && q.items[0] !== q.items[index]) return q.items[0] ?? null;
+  return null;
+}
+
+/**
  * Move to the next entry.
  * `auto` means the track finished by itself; `user` means the user pressed next.
  * Repeat-one only repeats on `auto` — pressing next always moves on.
