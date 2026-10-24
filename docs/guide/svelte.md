@@ -130,6 +130,8 @@ Subscribes to a [player event](/api/player#events) until the component is destro
 </script>
 ```
 
+With a custom track type, pass your typed player as the third argument, or annotate the handler's parameter: `onPlayerEvent('trackend', (item: QueueItem<MyTrack>) => …)`. Either way the track type is inferred.
+
 ## Store syntax
 
 The player is a Svelte store of its state, and `player.state` and `player.progress` are stores too. The `$` prefix works on them directly, as long as they are in scope as top-level variables:

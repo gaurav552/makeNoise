@@ -42,8 +42,11 @@ export type RepeatMode = 'off' | 'all' | 'one';
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'ended' | 'error';
 
 export interface PlayerError {
-  /** `load` — the file could not be fetched/decoded. `play` — the browser refused to play it. */
-  type: 'load' | 'play';
+  /**
+   * `load`: the file could not be fetched or decoded. The only kind today. A browser that
+   * refuses to start playback is not an error: it sets `state.blocked` and emits `blocked`.
+   */
+  type: 'load';
   message: string;
   item: QueueItem | null;
 }
@@ -69,6 +72,10 @@ export interface PlayerState<T extends Track = Track> {
   rate: number;
   /** The browser blocked autoplay; playback starts on the next user interaction. */
   blocked: boolean;
+  /**
+   * Why the current entry failed. Cleared by the next successful load, so after a skip it is
+   * already gone: use the `error` event for "skipped" notices.
+   */
   error: PlayerError | null;
 }
 

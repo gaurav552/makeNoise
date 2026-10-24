@@ -118,7 +118,7 @@ const playing = usePlayerState((s) => s.playing);
 const title = usePlayerState((s) => s.current?.track.title);
 ```
 
-With a custom track type, pass it as a type argument: `usePlayerState<MyTrack>()` or `usePlayer<MyTrack>()`.
+With a custom track type, pass it as a type argument: `usePlayerState<MyTrack>()` or `usePlayer<MyTrack>()`. For `usePlayerEvent`, annotate the handler's parameter and the track type is inferred: `usePlayerEvent('trackend', (item: QueueItem<MyTrack>) => …)`.
 
 ## `useProgress(selector?)`
 

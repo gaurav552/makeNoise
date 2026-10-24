@@ -144,8 +144,8 @@ interface PlayerState<T extends Track = Track> {
 }
 
 interface PlayerError {
-  /** 'load': the file could not be fetched or decoded. 'play': the browser refused to play it. */
-  type: 'load' | 'play';
+  /** 'load': the file could not be fetched or decoded. Blocked autoplay is not an error; see `blocked`. */
+  type: 'load';
   message: string;
   item: QueueItem | null;
 }
