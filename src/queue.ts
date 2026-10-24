@@ -1,4 +1,4 @@
-import type { QueueItem, RepeatMode, Track } from './types';
+import type { QueueItem, RepeatMode, Track } from './types.js';
 
 /**
  * The queue model. Pure data and pure functions — no audio, no events, no DOM.

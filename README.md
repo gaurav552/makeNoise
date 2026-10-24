@@ -335,4 +335,4 @@ How the engine handles Howler's sharp edges:
 
 ## License
 
-MIT © Gaura Ghimire
+MIT © Gaurav Raj Ghimire

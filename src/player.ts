@@ -1,11 +1,11 @@
-import { getDefaultPlayer, setDefaultPlayer } from './default-player';
-import { HowlerEngine } from './engine/howler';
-import type { AudioEngine, EngineHandlers } from './engine/types';
-import { connectMediaSession } from './media-session';
-import * as Q from './queue';
-import type { LoadOptions, QueueState, Random } from './queue';
-import { Emitter, createStore, type ReadableStore } from './store';
-import type { PlaybackStatus, PlayerError, PlayerState, ProgressState, QueueItem, RepeatMode, Track } from './types';
+import { getDefaultPlayer, setDefaultPlayer } from './default-player.js';
+import { HowlerEngine } from './engine/howler.js';
+import type { AudioEngine, EngineHandlers } from './engine/types.js';
+import { connectMediaSession } from './media-session.js';
+import * as Q from './queue.js';
+import type { LoadOptions, QueueState, Random } from './queue.js';
+import { Emitter, createStore, type ReadableStore } from './store.js';
+import type { PlaybackStatus, PlayerError, PlayerState, ProgressState, QueueItem, RepeatMode, Track } from './types.js';
 
 export interface PlayerOptions {
   /** Audio backend. Defaults to `new HowlerEngine()`. */

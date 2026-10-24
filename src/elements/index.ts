@@ -1,7 +1,7 @@
-import { MakeNoisePlayerElement } from './player-element';
+import { MakeNoisePlayerElement } from './player-element.js';
 
 export { MakeNoisePlayerElement };
-export { accents, type AccentName } from './accents';
+export { accents, type AccentName } from './accents.js';
 
 /** Registers `<mn-player>`. Safe to call more than once, and a no-op during server-side rendering. */
 export function defineElements(): void {

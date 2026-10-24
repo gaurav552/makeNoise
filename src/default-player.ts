@@ -1,4 +1,4 @@
-import type { Player } from './player';
+import type { Player } from './player.js';
 
 /**
  * The first player created becomes the default, so UI elements can find it

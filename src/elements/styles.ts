@@ -1,4 +1,4 @@
-import { accents, DEFAULT_ACCENT } from './accents';
+import { accents, DEFAULT_ACCENT } from './accents.js';
 
 // Styles for <mn-player>. Everything a page should customise is a --mn-* custom property
 // on the element, or a ::part(). Page styles override these defaults.
