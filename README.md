@@ -1,5 +1,9 @@
 # MakeNoise
 
+[![npm](https://img.shields.io/npm/v/makenoise)](https://www.npmjs.com/package/makenoise)
+[![license](https://img.shields.io/npm/l/makenoise)](LICENSE)
+[![docs](https://github.com/gaurav552/makeNoise/actions/workflows/pages.yml/badge.svg)](https://gaurav552.github.io/makeNoise/)
+
 A framework-agnostic audio player for single page applications, powered by [Howler.js](https://howlerjs.com).
 
 **[Documentation](https://gaurav552.github.io/makeNoise/)** · **[Live examples](https://gaurav552.github.io/makeNoise/examples/)** (vanilla, React, Vue, Svelte)
@@ -8,21 +12,26 @@ A framework-agnostic audio player for single page applications, powered by [Howl
 - **A real queue.** Play one track or a whole list, then add, remove, reorder, shuffle and repeat, with the queue always showing the actual play order.
 - **Works everywhere.** The core is plain TypeScript exposing a tiny store that React, Vue, Svelte, Solid and Angular can all consume natively.
 
-> Status: **core, default UI and framework bindings.** Queue, player, Howler engine, OS media controls, `<mn-player>` (a small corner player), React / Vue / Svelte bindings, keyboard shortcuts and next-track preloading. See [Roadmap](#roadmap).
+> Status: **0.1, published on npm.** Queue, player, Howler engine, OS media controls, `<mn-player>` (a small corner player), React / Vue / Svelte bindings, keyboard shortcuts and next-track preloading. See [Roadmap](#roadmap).
 
-## Try it
+## Install
 
 ```bash
-npm install
-npm run dev     # opens the test bench at http://localhost:5173
-npm run dev:react   # the same app in React (also dev:vue, dev:svelte)
-npm run docs:dev    # the documentation site
-npm run site:build  # the GitHub Pages site: docs + all four examples, built for /makeNoise/
-npm test        # unit tests (core, bindings, keyboard)
-npm run build   # dist/makenoise.js + dist/elements.js (ESM), dist/makenoise.iife.js (<script> tag, everything bundled)
+npm install makenoise
 ```
 
-The test bench (`examples/vanilla`) is a reading page with `<mn-player>` in the corner. It has three playlists (short local test tones, real streamed MP3s, and one with a broken file), corner and theme switchers, session save/restore, and an event log. The player is also on `window.player` for poking at in the console.
+Howler.js comes with it. React, Vue and Svelte are optional peer dependencies; install the one you use (React 18+, Vue 3.3+ or Svelte 5.7+).
+
+No bundler? One `<script>` tag gives you everything, Howler and `<mn-player>` included, on `window.MakeNoise`:
+
+```html
+<script src="https://unpkg.com/makenoise@0.1"></script>
+<mn-player></mn-player>
+<script>
+  const player = MakeNoise.createPlayer();
+  player.play({ id: '1', src: '/song.mp3', title: 'Song' });
+</script>
+```
 
 ## Quick start
 
@@ -323,6 +332,21 @@ How the engine handles Howler's sharp edges:
 - **Streams through HTML5 audio by default**, so long tracks start immediately instead of downloading first.
 - **Preloads the next track** shortly before the current one ends, and hands that same `Howl` over when it starts.
 
+## Development
+
+```bash
+git clone https://github.com/gaurav552/makeNoise.git && cd makeNoise
+npm install
+npm run dev     # opens the test bench at http://localhost:5173
+npm run dev:react   # the same app in React (also dev:vue, dev:svelte)
+npm run docs:dev    # the documentation site
+npm run site:build  # the GitHub Pages site: docs + all four examples, built for /makeNoise/
+npm test        # unit tests (core, bindings, keyboard)
+npm run build   # dist/makenoise.js + dist/elements.js (ESM), dist/makenoise.iife.js (<script> tag, everything bundled)
+```
+
+The test bench (`examples/vanilla`) is a reading page with `<mn-player>` in the corner. It has three playlists (short local test tones, real streamed MP3s, and one with a broken file), corner and theme switchers, session save/restore, and an event log. The player is also on `window.player` for poking at in the console.
+
 ## Roadmap
 
 - [x] Phase 0: project setup (TypeScript, Vite, Vitest)
@@ -332,6 +356,7 @@ How the engine handles Howler's sharp edges:
 - [x] Phase 3: `makenoise/react`, `makenoise/vue`, `makenoise/svelte` bindings + one demo app per framework (`examples/`)
 - [x] Phase 5: keyboard shortcuts (scoped), next-track preloading, SSR safety, docs site (`docs/`)
 - [x] Phase 6: public site on GitHub Pages: docs, examples gallery and the four demo apps, deployed by `.github/workflows/pages.yml`
+- [x] Phase 7: published to npm as [`makenoise`](https://www.npmjs.com/package/makenoise) 0.1.0
 
 ## License
 
