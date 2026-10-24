@@ -11,6 +11,10 @@ const player = createPlayer();
 const $ = <E extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as E;
 const hud = document.querySelector('mn-player')!;
 
+// On the docs site, link back to it.
+const docsUrl = import.meta.env.VITE_SITE_BASE;
+if (docsUrl) Object.assign($<HTMLAnchorElement>('docs-link'), { href: docsUrl, hidden: false });
+
 // ---------------------------------------------------------------------------
 // The application's playlists
 // ---------------------------------------------------------------------------

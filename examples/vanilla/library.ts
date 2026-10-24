@@ -18,9 +18,12 @@ function art(a: string, b: string, label: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+// On the docs site the tones live at `<site>/audio/`; in dev they're served from `/audio/`.
+const audio = `${import.meta.env.VITE_SITE_BASE ?? '/'}audio/`;
+
 const tone = (file: string, title: string, colors: [string, string], duration: number): Track => ({
   id: `tone-${file}`,
-  src: `/audio/${file}.wav`,
+  src: `${audio}${file}.wav`,
   title,
   artist: 'The Test Tones',
   album: 'Tone Studies',
@@ -72,7 +75,7 @@ export const playlists: Playlist[] = [
     description: 'Track 2 does not exist. The player should report it and skip to track 3.',
     tracks: [
       tones[6]!,
-      { id: 'missing', src: '/audio/this-file-does-not-exist.mp3', title: 'Missing File', artist: 'Nobody', artwork: art('#555', '#222', '??') },
+      { id: 'missing', src: `${audio}this-file-does-not-exist.mp3`, title: 'Missing File', artist: 'Nobody', artwork: art('#555', '#222', '??') },
       tones[2]!,
     ],
   },

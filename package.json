@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Gaura Ghimire",
+  "homepage": "https://gaurav552.github.io/makeNoise/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gaurav552/makeNoise.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gaurav552/makeNoise/issues"
+  },
   "sideEffects": [
     "./dist/elements.js",
     "./src/elements/index.ts",
@@ -51,6 +59,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "site:build": "node scripts/build-site.mjs",
+    "site:preview": "vitepress preview docs --base /makeNoise/",
     "tones": "node scripts/generate-tones.mjs"
   },
   "keywords": [

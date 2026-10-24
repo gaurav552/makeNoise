@@ -3,6 +3,9 @@ import { NowPlaying } from './components/NowPlaying';
 import { Playlists } from './components/Playlists';
 import { Queue } from './components/Queue';
 
+// Set when the example is built into the docs site.
+const docsUrl = import.meta.env.VITE_SITE_BASE;
+
 export function App() {
   return (
     <>
@@ -10,6 +13,11 @@ export function App() {
         <div className="brand">
           MakeNoise <span>· React</span>
         </div>
+        {docsUrl && (
+          <a className="link" href={docsUrl}>
+            MakeNoise docs
+          </a>
+        )}
       </header>
 
       <div className="page">

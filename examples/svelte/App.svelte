@@ -8,12 +8,16 @@
 
   // Optional here: without it, getPlayer() falls back to the first player created.
   setPlayer(player);
+
+  // Set when the example is built into the docs site.
+  const docsUrl = import.meta.env.VITE_SITE_BASE;
 </script>
 
 <header class="bar">
   <h1 class="brand">MakeNoise · Svelte <span>runes + makenoise/svelte</span></h1>
   <!-- The player is a plain Svelte store too, so $player works. -->
   <p class="count">{$player.queue.length} in queue</p>
+  {#if docsUrl}<a class="link" href={docsUrl}>MakeNoise docs</a>{/if}
 </header>
 
 <div class="page">
