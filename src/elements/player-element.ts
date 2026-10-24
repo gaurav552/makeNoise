@@ -69,7 +69,7 @@ const template = /* html */ `
         </div>
         <button class="btn fade queue-toggle" type="button" aria-label="Show queue" aria-expanded="false" aria-controls="queue">${icons.queue}</button>
         <button class="medallion" part="medallion" type="button" aria-label="Play">
-          <img class="art" alt="" decoding="async" />
+          <img class="art" alt="" decoding="async" referrerpolicy="no-referrer" />
           <span class="glyph"><span class="i-play">${icons.play}</span><span class="i-pause">${icons.pause}</span></span>
           <svg class="ring" viewBox="0 0 48 48" aria-hidden="true">
             <circle class="track" cx="24" cy="24" r="23" />
@@ -328,12 +328,13 @@ export class MakeNoisePlayerElement extends Base {
       this.whisper(`Couldn't play “${state.error.item?.track.title ?? 'this track'}”`, state.error.message);
     }
 
-    const artwork = track?.artwork ?? '';
+    // Only fetch artwork that will be shown: every request reaches the artwork's host.
+    const artwork = this.hasAttribute('artwork') ? (track?.artwork ?? '') : '';
     if (els.art.getAttribute('src') !== artwork) {
       if (artwork) els.art.src = artwork;
       else els.art.removeAttribute('src');
     }
-    els.medallion.classList.toggle('has-art', Boolean(artwork) && this.hasAttribute('artwork'));
+    els.medallion.classList.toggle('has-art', Boolean(artwork));
     els.medallion.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
 
     els.shuffle.setAttribute('aria-pressed', String(state.shuffle));
