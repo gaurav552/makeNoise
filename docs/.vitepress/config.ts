@@ -1,11 +1,22 @@
 import { defineConfig } from 'vitepress';
 import { makenoiseAliases } from '../../examples/aliases.ts';
 
+const repo = 'https://github.com/gaurav552/makeNoise';
+const description = 'A framework-agnostic audio player for single page applications, powered by Howler.js.';
+
 export default defineConfig({
   title: 'MakeNoise',
-  description: 'A framework-agnostic audio player for single page applications, powered by Howler.js.',
+  description,
+  // scripts/build-site.mjs sets this to `/makeNoise/` for GitHub Pages; dev runs at `/`.
+  base: process.env.SITE_BASE ?? '/',
   cleanUrls: true,
+  sitemap: { hostname: `https://gaurav552.github.io${process.env.SITE_BASE ?? '/'}` },
+  // The example apps are built into /examples/<name>/ next to the docs, not by VitePress.
+  ignoreDeadLinks: [/^\/examples\/(vanilla|react|vue|svelte)\/$/],
   head: [
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'MakeNoise' }],
+    ['meta', { property: 'og:description', content: description }],
     [
       'link',
       {
@@ -31,7 +42,15 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started', activeMatch: '/guide/' },
       { text: 'API', link: '/api/player', activeMatch: '/api/' },
+      { text: 'Examples', link: '/examples/', activeMatch: '/examples/' },
     ],
+
+    socialLinks: [{ icon: 'github', link: repo }],
+
+    editLink: {
+      pattern: `${repo}/edit/master/docs/:path`,
+      text: 'Edit this page on GitHub',
+    },
 
     sidebar: {
       '/guide/': [

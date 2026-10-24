@@ -2,6 +2,8 @@
 
 A framework-agnostic audio player for single page applications, powered by [Howler.js](https://howlerjs.com).
 
+**[Documentation](https://gaurav552.github.io/makeNoise/)** · **[Live examples](https://gaurav552.github.io/makeNoise/examples/)** (vanilla, React, Vue, Svelte)
+
 - **Your app owns the playlists.** MakeNoise only receives copies; it never modifies or saves them.
 - **A real queue.** Play one track or a whole list, then add, remove, reorder, shuffle and repeat, with the queue always showing the actual play order.
 - **Works everywhere.** The core is plain TypeScript exposing a tiny store that React, Vue, Svelte, Solid and Angular can all consume natively.
@@ -15,6 +17,7 @@ npm install
 npm run dev     # opens the test bench at http://localhost:5173
 npm run dev:react   # the same app in React (also dev:vue, dev:svelte)
 npm run docs:dev    # the documentation site
+npm run site:build  # the GitHub Pages site: docs + all four examples, built for /makeNoise/
 npm test        # unit tests (core, bindings, keyboard)
 npm run build   # dist/makenoise.js + dist/elements.js (ESM), dist/makenoise.iife.js (<script> tag, everything bundled)
 ```
@@ -328,6 +331,7 @@ How the engine handles Howler's sharp edges:
 - [x] Phase 4: `<mn-player>`, the corner player with queue panel, themes, `::part()` and CSS custom properties
 - [x] Phase 3: `makenoise/react`, `makenoise/vue`, `makenoise/svelte` bindings + one demo app per framework (`examples/`)
 - [x] Phase 5: keyboard shortcuts (scoped), next-track preloading, SSR safety, docs site (`docs/`)
+- [x] Phase 6: public site on GitHub Pages: docs, examples gallery and the four demo apps, deployed by `.github/workflows/pages.yml`
 
 ## License
 

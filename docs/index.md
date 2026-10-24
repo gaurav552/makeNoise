@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: API
       link: /api/player
+    - theme: alt
+      text: Live examples
+      link: /examples/
 
 features:
   - title: Your app owns the playlists
