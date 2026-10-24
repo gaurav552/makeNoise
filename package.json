@@ -1,6 +1,6 @@
 {
   "name": "makenoise",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-agnostic audio player for single page applications, powered by Howler.js",
   "type": "module",
   "license": "MIT",
